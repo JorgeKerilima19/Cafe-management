@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // ← changed
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String // bcrypt hashed
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+}
+
+enum Role {
+  ADMIN
+  BARISTA
+  STAFF
+}
+
+/// ========================
+/// MENU ITEMS
+/// ========================
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  price       Float
+  category    String   @default("General") @db.VarChar(100)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems OrderItem[]
+}
+
+/// ========================
+/// ORDERS
+/// ========================
+
+model Order {
+  id            String  @id @default(cuid())
+  customerName  String? // e.g., "Mesa 3" or "Ana"
+  customerPhone String? // for Yape reference
+
+  total      Float
+  cashAmount Float @default(0)
+  yapeAmount Float @default(0)
+
+  paymentMethod String // "CASH" | "YAPE" | "MIXED"
+  status        OrderStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Optional: staff who marked as paid/prepared
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  items OrderItem[]
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+/// ========================
+/// ORDER ITEMS (for item-level reporting)
+/// ========================
+
+model OrderItem {
+  id         String @id @default(cuid())
+  orderId    String
+  menuItemId String
+
+  name     String  @db.VarChar(255)
+  price    Float
+  quantity Int     @default(1)
+  options  String?
+
+  createdAt DateTime @default(now())
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+}
