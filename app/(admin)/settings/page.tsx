@@ -31,7 +31,7 @@ export default async function SettingsPage() {
             Administra cuentas de staff, roles y permisos.
           </p>
           <Link
-            href="/users"
+            href="/settings/staff"
             className="inline-block px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white text-sm font-medium rounded-md transition"
           >
             Gestionar personal
