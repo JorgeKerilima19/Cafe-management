@@ -71,15 +71,6 @@ export default function LoginPage() {
           </div>
 
           <SubmitButton />
-
-          <div className="text-center mt-4">
-            <a
-              href="/register"
-              className="text-sm text-rose-700 hover:underline"
-            >
-              ¿No tienes cuenta? Regístrate
-            </a>
-          </div>
         </form>
       </div>
     </div>

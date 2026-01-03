@@ -62,7 +62,7 @@ export async function login(
   }
 
   await createSession(user.id);
-  redirect("admin/dashboard");
+  redirect("/");
 }
 export async function logout() {
   "use server";

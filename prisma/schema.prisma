@@ -17,12 +17,19 @@ model User {
   updatedAt DateTime @updatedAt
 
   orders Order[]
+
+  voidRecords VoidRecord[]
+
+  cashRegisters CashRegister[] @relation("OpenedRegisters")
+
+  cashRegisterClosed CashRegister[] @relation("ClosedRegisters")
 }
 
 enum Role {
   ADMIN
   BARISTA
   STAFF
+  SYSTEM
 }
 
 /// ========================
@@ -67,6 +74,8 @@ model Order {
   user   User?   @relation(fields: [userId], references: [id])
 
   items OrderItem[]
+
+  voidRecords VoidRecord[]
 }
 
 enum OrderStatus {
@@ -109,4 +118,39 @@ model PendingOrder {
 
   // Optional: auto-delete old carts
   @@map("pending_orders")
+}
+
+model VoidRecord {
+  id      String  @id @default(cuid())
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  amount    Float
+  reason    String   @db.Text
+  createdAt DateTime @default(now())
+  voidedAt  DateTime
+
+  // ✅ Make these OPTIONAL
+  voidedById String? // ← ? makes it nullable
+  voidedBy   User?   @relation(fields: [voidedById], references: [id]) // ← ? makes relation optional
+}
+
+model CashRegister {
+  id             String    @id @default(cuid())
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+  openingAmount  Float // Amount left as safeguard
+  closingAmount  Float? // Final cash count
+  expectedAmount Float? // Calculated sales (cash only)
+  notes          String?   @db.Text
+  isOpen         Boolean   @default(true)
+
+  // Staff who opened/closed
+  openedById String
+  openedBy   User   @relation("OpenedRegisters", fields: [openedById], references: [id])
+
+  closedById String? // Optional if not closed yet
+  closedBy   User?   @relation("ClosedRegisters", fields: [closedById], references: [id])
+
+  @@map("cash_registers")
 }

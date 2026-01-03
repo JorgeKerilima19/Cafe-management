@@ -17,21 +17,24 @@ export default async function AdminLayout({
     {
       name: "Dashboard",
       href: "/dashboard",
-      allowed: ["ADMIN", "BARISTA", "STAFF"],
+      allowed: ["ADMIN"],
     },
     {
       name: "Pedidos",
       href: "/orders",
       allowed: ["ADMIN", "BARISTA", "STAFF"],
     },
-    { name: "Menú", href: "/menu", allowed: ["ADMIN"] },
-    { name: "Personal", href: "/users", allowed: ["ADMIN"] },
+    {
+      name: "Cancelaciones",
+      href: "/settings/void-records",
+      allowed: ["ADMIN"],
+    },
     {
       name: "Reportes",
-      href: "/reports",
-      allowed: ["ADMIN", "BARISTA", "STAFF"],
+      href: "/settings/reports",
+      allowed: ["ADMIN"],
     },
-    { name: "Configuración", href: "/settings", allowed: ["ADMIN"] },
+    { name: "Ajustes", href: "/settings", allowed: ["ADMIN"] },
   ].filter((item) => item.allowed.includes(user.role));
 
   return (

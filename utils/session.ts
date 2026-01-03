@@ -5,11 +5,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
-const SESSION_COOKIE_NAME = "cafeteria_session";
+// ✅ Use ONE consistent cookie name
+const SESSION_COOKIE_NAME = "user_id"; // ← Changed from "cafeteria_session"
 
 export async function createSession(userId: string): Promise<void> {
   (await cookies()).set({
-    name: SESSION_COOKIE_NAME,
+    name: SESSION_COOKIE_NAME, // ✅ Now matches
     value: userId,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -23,7 +24,7 @@ export async function destroySession(): Promise<void> {
 }
 
 export async function getCurrentUser() {
-  const userId = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const userId = await getSessionUserId();
   if (!userId) return null;
 
   return await prisma.user.findUnique({
@@ -32,14 +33,28 @@ export async function getCurrentUser() {
   });
 }
 
-export async function requireAuth() {
+export async function requireAuth(
+  allowedRoles: ("ADMIN" | "BARISTA" | "STAFF" | "SYSTEM")[] = ["ADMIN"]
+) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error("No autorizado");
+  }
+
   return user;
 }
 
 export async function requireAdmin() {
-  const user = await requireAuth();
-  if (user.role !== "ADMIN") redirect("/dashboard");
+  const user = await requireAuth(["ADMIN"]);
   return user;
+}
+
+// ✅ Use the same cookie name here
+async function getSessionUserId() {
+  const cookieStore = await cookies();
+  return cookieStore.get(SESSION_COOKIE_NAME)?.value || null;
 }
