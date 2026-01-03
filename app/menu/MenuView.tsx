@@ -1,7 +1,8 @@
-// app/menu/MenuClient.tsx
+// app/menu/MenuView.tsx
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type MenuItem = {
@@ -13,17 +14,16 @@ type MenuItem = {
   imageUrl: string | null;
 };
 
-export default function MenuClient({
+export default function MenuView({
   initialItems,
   categories,
 }: {
   initialItems: MenuItem[];
   categories: string[];
 }) {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<Array<MenuItem & { quantity: number }>>([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
 
   const filteredItems = selectedCategory
     ? initialItems.filter((item) => item.category === selectedCategory)
@@ -38,6 +38,12 @@ export default function MenuClient({
   }, {} as Record<string, MenuItem[]>);
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const safeCart = cart.map(({ id, name, price, quantity }) => ({
+    id,
+    name,
+    price,
+    quantity,
+  }));
 
   const addToCart = (item: MenuItem) => {
     setCart((prev) => {
@@ -71,9 +77,19 @@ export default function MenuClient({
     );
   };
 
+  const removeFromCart = (id: string) => {
+    setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const proceedToCheckout = () => {
+    if (total === 0) return;
+    const encoded = btoa(JSON.stringify({ items: safeCart, total }));
+    router.push(`/menu/checkout?cart=${encoded}`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">Menú</h1>
           <Link href="/" className="text-rose-700 hover:text-rose-800 text-sm">
@@ -83,7 +99,6 @@ export default function MenuClient({
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
-        {/* Menu Items */}
         <div className="lg:w-3/4">
           <div className="flex flex-wrap gap-2 mb-6">
             <button
@@ -112,7 +127,7 @@ export default function MenuClient({
           </div>
 
           {categoriesToShow.length === 0 ? (
-            <p className="text-gray-600">No hay items en esta categoría.</p>
+            <p className="text-gray-600">No hay items.</p>
           ) : (
             categoriesToShow.map((category) => (
               <div key={category} className="mb-8">
@@ -123,27 +138,22 @@ export default function MenuClient({
                   {itemsByCategory[category].map((item) => (
                     <div
                       key={item.id}
-                      className="bg-white rounded-xl shadow-sm p-4 flex flex-col sm:flex-row gap-4 items-center justify-center"
+                      className="bg-white rounded-xl shadow-sm p-4 flex flex-col sm:flex-row gap-10"
                     >
-                      {/* Larger Image */}
-                      <div className="shrink-0 h-full w-32 flex items-center justify-center">
-                        {item.imageUrl ? (
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="h-full w-full object-fill rounded-lg"
-                          />
-                        ) : (
-                          <div className="h-32 w-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                            <span className="text-gray-500 text-sm text-center px-2">
-                              Sin imagen
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Info & Action */}
-                      <div className="flex-1 flex flex-col justify-between gap-8">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="h-32 w-32 object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="h-32 w-32 bg-gray-200 rounded-lg flex items-center justify-center">
+                          <span className="text-gray-500 text-sm text-center px-2">
+                            Sin imagen
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1 flex flex-col justify-between gap-6">
                         <div>
                           <h3 className="text-lg font-bold text-gray-800">
                             {item.name}
@@ -159,9 +169,9 @@ export default function MenuClient({
                         </div>
                         <button
                           onClick={() => addToCart(item)}
-                          className="mt-2 sm:mt-0 bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-lg font-medium"
+                          className="mt-4 sm:mt-0 bg-rose-700 hover:bg-rose-800 text-white px-4 py-2 rounded-lg font-medium"
                         >
-                          Agregar al pedido
+                          Agregar
                         </button>
                       </div>
                     </div>
@@ -172,13 +182,11 @@ export default function MenuClient({
           )}
         </div>
 
-        {/* Simplified Cart */}
         <div className="lg:w-1/4">
-          <div className="bg-white rounded-xl shadow-sm p-4 sticky top-6">
+          <div className="bg-white rounded-xl shadow-sm p-4 sticky top-24">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Tu Pedido</h2>
-
             {cart.length === 0 ? (
-              <p className="text-gray-600">Agrega items para continuar.</p>
+              <p className="text-gray-600">Agrega items.</p>
             ) : (
               <>
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
@@ -187,27 +195,33 @@ export default function MenuClient({
                       key={item.id}
                       className="flex justify-between items-center"
                     >
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-gray-600">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{item.name}</p>
+                        <p className="text-xs text-gray-600">
                           x{item.quantity}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => decreaseQty(item.id)}
-                          className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 text-lg"
+                          className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 text-sm"
                         >
                           −
                         </button>
-                        <span className="font-medium text-rose-700">
+                        <span className="font-medium text-rose-700 text-sm">
                           S/ {(item.price * item.quantity).toFixed(2)}
                         </span>
                         <button
                           onClick={() => increaseQty(item.id)}
-                          className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 text-lg"
+                          className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 text-sm"
                         >
                           +
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="text-red-500 hover:text-red-700 ml-2"
+                        >
+                          ✕
                         </button>
                       </div>
                     </div>
@@ -215,62 +229,21 @@ export default function MenuClient({
                 </div>
 
                 <div className="mt-6 pt-4 border-t">
-                  <div className="flex justify-between text-xl font-bold">
+                  <div className="flex justify-between text-lg font-bold">
                     <span>Total:</span>
                     <span className="text-rose-700">S/ {total.toFixed(2)}</span>
                   </div>
-
-                  <div className="mt-4 space-y-3">
-                    <input
-                      type="text"
-                      placeholder="Nombre (requerido)"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800"
-                      required
-                    />
-                    <input
-                      type="text"
-                      placeholder="Teléfono"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800"
-                    />
-                  </div>
-
-                  <form action="/payment" method="GET" className="mt-6">
-                    <input
-                      type="hidden"
-                      name="items"
-                      value={JSON.stringify(cart)}
-                    />
-                    <input
-                      type="hidden"
-                      name="total"
-                      value={total.toString()}
-                    />
-                    <input
-                      type="hidden"
-                      name="customerName"
-                      value={customerName}
-                    />
-                    <input
-                      type="hidden"
-                      name="customerPhone"
-                      value={customerPhone}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!customerName.trim() || total === 0}
-                      className={`w-full py-3 px-4 rounded-lg font-bold text-white ${
-                        !customerName.trim() || total === 0
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-rose-700 hover:bg-rose-800"
-                      }`}
-                    >
-                      Proceder al Pago
-                    </button>
-                  </form>
+                  <button
+                    onClick={proceedToCheckout}
+                    disabled={total === 0}
+                    className={`w-full mt-4 py-2.5 rounded-lg font-bold ${
+                      total === 0
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-rose-700 hover:bg-rose-800 text-white"
+                    }`}
+                  >
+                    Proceder al Pago
+                  </button>
                 </div>
               </>
             )}

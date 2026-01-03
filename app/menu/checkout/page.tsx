@@ -1,0 +1,6 @@
+// app/menu/checkout/page.tsx
+import CheckoutView from "./CheckoutView";
+
+export default function CheckoutPage() {
+  return <CheckoutView />;
+}

@@ -69,23 +69,3 @@ export async function logout() {
   await destroySession();
   redirect("/login");
 }
-
-export async function createOrder(formData: FormData) {
-  "use server";
-
-  const items = JSON.parse(formData.get("items") as string);
-  const total = parseFloat(formData.get("total") as string);
-  const customerName = formData.get("customerName") as string | null;
-  const customerPhone = formData.get("customerPhone") as string | null;
-  const paymentMethod = "PENDING"; // Will be set in payment page
-
-  // For now, just redirect to payment with order data
-  // In real app, you'd save to DB here
-  // But for MVP, we'll pass via URL or context (we'll use URL searchParams)
-
-  // Encode order data in URL (base64 to keep it safe)
-  const orderData = { items, total, customerName, customerPhone };
-  const encoded = btoa(JSON.stringify(orderData));
-
-  redirect(`/payment?order=${encoded}`);
-}

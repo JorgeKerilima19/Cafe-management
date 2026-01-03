@@ -97,3 +97,16 @@ model OrderItem {
   order    Order    @relation(fields: [orderId], references: [id])
   menuItem MenuItem @relation(fields: [menuItemId], references: [id])
 }
+
+model PendingOrder {
+  id            String   @id @default(cuid())
+  customerName  String
+  customerPhone String?
+  items         Json // Array of { id, name, price, quantity }
+  total         Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Optional: auto-delete old carts
+  @@map("pending_orders")
+}
