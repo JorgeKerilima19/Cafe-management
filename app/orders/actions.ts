@@ -12,8 +12,24 @@ export async function getTodaysOrders() {
       createdAt: { gte: start },
       status: { not: "CANCELLED" },
     },
-    orderBy: { createdAt: "asc" }, // ← ASC for oldest first
-    include: { user: { select: { name: true } } },
+    orderBy: { createdAt: "asc" },
+    // ✅ ONLY use select (no include)
+    select: {
+      id: true,
+      customerName: true,
+      total: true,
+      status: true,
+      createdAt: true,
+      paymentMethod: true,
+      cashAmount: true,
+      yapeAmount: true,
+      // ✅ Select user fields directly
+      user: {
+        select: {
+          name: true,
+        },
+      },
+    },
   });
   return orders;
 }

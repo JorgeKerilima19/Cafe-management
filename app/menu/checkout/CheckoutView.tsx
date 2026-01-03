@@ -26,6 +26,7 @@ export default function CheckoutClient() {
   );
   const [cashAmount, setCashAmount] = useState<string>("");
   const [yapeAmount, setYapeAmount] = useState<string>("");
+  const [customerName, setCustomerName] = useState<string>("");
 
   useEffect(() => {
     if (!cartParam) {
@@ -58,6 +59,11 @@ export default function CheckoutClient() {
     if (paymentMethod === "YAPE") return total.toString();
     return "0";
   };
+
+  const yapeAmountNum = parseFloat(getYapeAmount()) || 0;
+  const showYapeQr =
+    (paymentMethod === "YAPE" || paymentMethod === "MIXED") &&
+    yapeAmountNum > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -95,6 +101,30 @@ export default function CheckoutClient() {
           </div>
         </div>
 
+        {/* ✅ Static Yape QR Code */}
+        {showYapeQr && (
+          <div className="bg-white rounded-xl p-4 mb-6 border border-blue-200">
+            <h2 className="font-bold text-lg mb-3 text-blue-800">
+              Paga con Yape
+            </h2>
+            <div className="flex flex-col items-center">
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <img
+                  src="/uploads/yape.jpeg"
+                  alt="Yape QR Code"
+                  className="w-48 h-48 object-contain"
+                />
+              </div>
+              <p className="mt-2 text-sm text-gray-600">
+                Escanea el código QR con la app de Yape
+              </p>
+              <p className="text-sm text-gray-600">
+                Monto a pagar: S/ {yapeAmountNum.toFixed(2)}
+              </p>
+            </div>
+          </div>
+        )}
+
         <form action={createOrder} method="post" className="space-y-4">
           {/* Hidden fields */}
           <input type="hidden" name="items" value={JSON.stringify(items)} />
@@ -108,6 +138,8 @@ export default function CheckoutClient() {
             <input
               type="text"
               name="customerName"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800"
               required
             />
@@ -119,7 +151,7 @@ export default function CheckoutClient() {
               {(["CASH", "YAPE", "MIXED"] as const).map((method) => (
                 <button
                   key={method}
-                  type="button" // ← Only for UI toggle
+                  type="button"
                   onClick={() => setPaymentMethod(method)}
                   className={`py-2 px-2 text-sm rounded-lg ${
                     paymentMethod === method

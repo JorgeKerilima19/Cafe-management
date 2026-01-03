@@ -13,6 +13,9 @@ type Order = {
   status: string;
   createdAt: Date;
   user: { name: string } | null;
+  paymentMethod: string; // ✅ Add payment method
+  cashAmount: number; // ✅ Add cash amount
+  yapeAmount: number; // ✅ Add yape amount
 };
 
 export default function OrderDashboard({
@@ -26,14 +29,12 @@ export default function OrderDashboard({
   const previousOrderIds = useRef(new Set(initialOrders.map((o) => o.id)));
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Preload sound
   useEffect(() => {
     if (typeof Audio !== "undefined") {
       audioRef.current = new Audio("/notification.mp3");
     }
   }, []);
 
-  // ✅ Fix useEffect dependency: NO dependency array → runs once
   useEffect(() => {
     const poll = async () => {
       try {
@@ -49,20 +50,18 @@ export default function OrderDashboard({
             .catch((e) => console.warn("Audio play failed:", e));
         }
 
-        // ✅ Merge orders: keep existing + add new (no duplicates)
         const mergedOrders = [...orders];
         for (const newOrder of newOrders) {
           const existingIndex = mergedOrders.findIndex(
             (o) => o.id === newOrder.id
           );
           if (existingIndex === -1) {
-            mergedOrders.push(newOrder); // Append new to end
+            mergedOrders.push(newOrder);
           } else {
-            mergedOrders[existingIndex] = newOrder; // Update existing
+            mergedOrders[existingIndex] = newOrder;
           }
         }
 
-        // ✅ Sort by createdAt ASC (oldest first)
         mergedOrders.sort(
           (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
         );
@@ -77,7 +76,7 @@ export default function OrderDashboard({
 
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, []); // ✅ Empty dependency array → runs once on mount
+  }, []);
 
   const getOrderBgColor = (createdAt: Date) => {
     const minutes = differenceInMinutes(new Date(), createdAt);
@@ -93,14 +92,25 @@ export default function OrderDashboard({
     (o) => o.status === "COMPLETED" || o.status === "CANCELLED"
   );
 
+  // ✅ Helper to format payment method
+  const getPaymentMethodDisplay = (method: string) => {
+    switch (method) {
+      case "CASH":
+        return "Efectivo";
+      case "YAPE":
+        return "Yape";
+      case "MIXED":
+        return "Mixto";
+      default:
+        return method;
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Pedidos de Hoy</h1>
-        <div
-          className="text-sm text-gray-600"
-          suppressHydrationWarning // ✅ Fixes time mismatch
-        >
+        <div className="text-sm text-gray-600" suppressHydrationWarning>
           Última actualización: {format(lastFetchTime, "HH:mm:ss")}
         </div>
       </div>
@@ -128,6 +138,46 @@ export default function OrderDashboard({
                   <p className="text-gray-600 text-sm">
                     {format(order.createdAt, "HH:mm")}
                   </p>
+
+                  {/* ✅ Payment Method & Amounts */}
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-gray-700">
+                        Método:
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          order.paymentMethod === "CASH"
+                            ? "bg-green-200 text-green-800"
+                            : order.paymentMethod === "YAPE"
+                            ? "bg-purple-200 text-purple-800"
+                            : "bg-blue-200 text-blue-800"
+                        }`}
+                      >
+                        {getPaymentMethodDisplay(order.paymentMethod)}
+                      </span>
+                    </div>
+
+                    {order.paymentMethod === "MIXED" ? (
+                      <div className="text-xs text-gray-600">
+                        <span className="text-green-700">
+                          Efectivo: S/ {order.cashAmount.toFixed(2)}
+                        </span>{" "}
+                        •
+                        <span className="text-purple-700 ml-2">
+                          Yape: S/ {order.yapeAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    ) : order.paymentMethod === "CASH" ? (
+                      <div className="text-xs text-green-700">
+                        Efectivo: S/ {order.total.toFixed(2)}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-purple-700">
+                        Yape: S/ {order.total.toFixed(2)}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-lg">
@@ -189,10 +239,13 @@ export default function OrderDashboard({
                     Cliente
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
-                    Hora
+                    Método
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
-                    Total
+                    Monto
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                    Hora
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
                     Estado
@@ -206,10 +259,42 @@ export default function OrderDashboard({
                       {order.customerName || "—"}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {format(order.createdAt, "HH:mm")}
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs ${
+                          order.paymentMethod === "CASH"
+                            ? "bg-green-200 text-green-800"
+                            : order.paymentMethod === "YAPE"
+                            ? "bg-purple-200 text-purple-800"
+                            : "bg-blue-200 text-blue-800"
+                        }`}
+                      >
+                        {getPaymentMethodDisplay(order.paymentMethod)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium">
-                      S/ {order.total.toFixed(2)}
+                    <td className="px-4 py-3 text-sm">
+                      {order.paymentMethod === "MIXED" ? (
+                        <div>
+                          <div className="text-green-700">
+                            Efectivo: S/ {order.cashAmount.toFixed(2)}
+                          </div>
+                          <div className="text-purple-700">
+                            Yape: S/ {order.yapeAmount.toFixed(2)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span
+                          className={
+                            order.paymentMethod === "CASH"
+                              ? "text-green-700"
+                              : "text-purple-700"
+                          }
+                        >
+                          S/ {order.total.toFixed(2)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {format(order.createdAt, "HH:mm")}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
