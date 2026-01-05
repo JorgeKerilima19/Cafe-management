@@ -13,7 +13,6 @@ export async function getTodaysOrders() {
       status: { not: "CANCELLED" },
     },
     orderBy: { createdAt: "asc" },
-    // ✅ ONLY use select (no include)
     select: {
       id: true,
       customerName: true,
@@ -23,17 +22,24 @@ export async function getTodaysOrders() {
       paymentMethod: true,
       cashAmount: true,
       yapeAmount: true,
-      // ✅ Select user fields directly
+      // ✅ Include user (even if null)
       user: {
         select: {
           name: true,
+        },
+      },
+      // ✅ Include items
+      items: {
+        select: {
+          name: true,
+          quantity: true,
+          price: true,
         },
       },
     },
   });
   return orders;
 }
-
 export async function completeOrder(formData: FormData) {
   const orderId = formData.get("orderId") as string;
   if (!orderId) throw new Error("ID requerido");

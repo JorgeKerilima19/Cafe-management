@@ -6,6 +6,12 @@ import { format, differenceInMinutes } from "date-fns";
 import { completeOrder, getTodaysOrders } from "./actions";
 import VoidModal from "./VoidModal";
 
+type OrderItem = {
+  name: string;
+  quantity: number;
+  price: number;
+};
+
 type Order = {
   id: string;
   customerName: string | null;
@@ -13,10 +19,106 @@ type Order = {
   status: string;
   createdAt: Date;
   user: { name: string } | null;
-  paymentMethod: string; // ✅ Add payment method
-  cashAmount: number; // ✅ Add cash amount
-  yapeAmount: number; // ✅ Add yape amount
+  paymentMethod: string;
+  cashAmount: number;
+  yapeAmount: number;
+  items: OrderItem[];
 };
+
+// ✅ Helper: format payment method
+const getPaymentMethodDisplay = (method: string) => {
+  switch (method) {
+    case "CASH":
+      return "Efectivo";
+    case "YAPE":
+      return "Yape";
+    case "MIXED":
+      return "Mixto";
+    default:
+      return method;
+  }
+};
+
+// ✅ Print function
+function printReceipt(order: Order) {
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument!;
+  const win = iframe.contentWindow!;
+
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Recibo - Cafetería La Goutte</title>
+      <style>
+        body { font-family: Arial, sans-serif; font-size: 14px; margin: 0; padding: 10px; }
+        .header { text-align: center; margin-bottom: 10px; }
+        .items { margin: 10px 0; }
+        .item { display: flex; justify-content: space-between; margin: 4px 0; }
+        .total { font-weight: bold; margin-top: 10px; text-align: right; font-size: 16px; }
+        .footer { text-align: center; margin-top: 15px; font-size: 12px; }
+        .method { font-size: 12px; margin-top: 5px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h2>Cafetería La Goutte</h2>
+        <p>${format(order.createdAt, "dd/MM/yyyy HH:mm")}</p>
+      </div>
+      <p>${order.customerName || "Pedido"}</p>
+      
+      <div class="items">
+        ${
+          order.items.length > 0
+            ? order.items
+                .map(
+                  (item) => `
+                  <div class="item">
+                    <span>${item.name}</span>
+                    <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                  <div class="item-details">
+                    <span>  ${item.quantity} × S/ ${item.price.toFixed(2)}</span>
+                  </div>
+                `
+                )
+                .join("")
+            : '<div class="item"><span>Sin detalles</span></div>'
+        }
+      </div>
+      
+      <div class="total">Total: S/ ${order.total.toFixed(2)}</div>
+      
+      <div class="method">
+        Método: ${getPaymentMethodDisplay(order.paymentMethod)}
+        ${
+          order.paymentMethod === "MIXED"
+            ? `<br>Efectivo: S/ ${order.cashAmount.toFixed(
+                2
+              )} | Yape: S/ ${order.yapeAmount.toFixed(2)}`
+            : ""
+        }
+      </div>
+      
+      <div class="footer">
+        ¡Gracias por su compra!
+      </div>
+    </body>
+    </html>
+  `);
+  doc.close();
+
+  win.focus();
+  win.print();
+
+  setTimeout(() => {
+    document.body.removeChild(iframe);
+  }, 1000);
+}
 
 export default function OrderDashboard({
   initialOrders,
@@ -92,20 +194,6 @@ export default function OrderDashboard({
     (o) => o.status === "COMPLETED" || o.status === "CANCELLED"
   );
 
-  // ✅ Helper to format payment method
-  const getPaymentMethodDisplay = (method: string) => {
-    switch (method) {
-      case "CASH":
-        return "Efectivo";
-      case "YAPE":
-        return "Yape";
-      case "MIXED":
-        return "Mixto";
-      default:
-        return method;
-    }
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
       <div className="flex justify-between items-center mb-6">
@@ -138,15 +226,24 @@ export default function OrderDashboard({
                   <p className="text-gray-600 text-sm">
                     {format(order.createdAt, "HH:mm")}
                   </p>
-
-                  {/* ✅ Payment Method & Amounts */}
+                  <div className="mt-2">
+                    <ul className="mt-1 space-y-1">
+                      {order.items.map((item, idx) => (
+                        <li key={idx} className="text-lg text-gray-600">
+                          • {item.name} ×{item.quantity} (S/{" "}
+                          {(item.price * item.quantity).toFixed(2)})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {/* ✅ LARGER Payment Method & Amounts */}
                   <div className="mt-2 pt-2 border-t border-gray-200">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium text-gray-700">
+                      <span className="text-sm font-medium text-gray-700">
                         Método:
                       </span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
+                        className={`text-sm px-2 py-0.5 rounded-full ${
                           order.paymentMethod === "CASH"
                             ? "bg-green-200 text-green-800"
                             : order.paymentMethod === "YAPE"
@@ -159,21 +256,21 @@ export default function OrderDashboard({
                     </div>
 
                     {order.paymentMethod === "MIXED" ? (
-                      <div className="text-xs text-gray-600">
-                        <span className="text-green-700">
+                      <div className="text-sm text-gray-700">
+                        <span className="text-green-700 font-medium">
                           Efectivo: S/ {order.cashAmount.toFixed(2)}
                         </span>{" "}
                         •
-                        <span className="text-purple-700 ml-2">
+                        <span className="text-purple-700 ml-2 font-medium">
                           Yape: S/ {order.yapeAmount.toFixed(2)}
                         </span>
                       </div>
                     ) : order.paymentMethod === "CASH" ? (
-                      <div className="text-xs text-green-700">
+                      <div className="text-sm text-green-700 font-medium">
                         Efectivo: S/ {order.total.toFixed(2)}
                       </div>
                     ) : (
-                      <div className="text-xs text-purple-700">
+                      <div className="text-sm text-purple-700 font-medium">
                         Yape: S/ {order.total.toFixed(2)}
                       </div>
                     )}
@@ -217,6 +314,14 @@ export default function OrderDashboard({
                     className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
                   >
                     Anular
+                  </button>
+                  {/* ✅ Print button for pending orders */}
+                  <button
+                    type="button"
+                    onClick={() => printReceipt(order)}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    🖨️ Imprimir
                   </button>
                 </div>
               )}
@@ -297,17 +402,27 @@ export default function OrderDashboard({
                       {format(order.createdAt, "HH:mm")}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          order.status === "COMPLETED"
-                            ? "bg-green-200 text-green-800"
-                            : "bg-red-200 text-red-800"
-                        }`}
-                      >
-                        {order.status === "COMPLETED"
-                          ? "Completado"
-                          : "Anulado"}
-                      </span>
+                      <div className="flex gap-2 items-center">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            order.status === "COMPLETED"
+                              ? "bg-green-200 text-green-800"
+                              : "bg-red-200 text-red-800"
+                          }`}
+                        >
+                          {order.status === "COMPLETED"
+                            ? "Completado"
+                            : "Anulado"}
+                        </span>
+                        {order.status === "COMPLETED" && (
+                          <button
+                            onClick={() => printReceipt(order)}
+                            className="text-blue-600 hover:text-blue-800 text-xs"
+                          >
+                            🖨️ Imprimir
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
