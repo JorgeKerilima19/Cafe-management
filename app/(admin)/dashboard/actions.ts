@@ -7,9 +7,7 @@ import { revalidatePath } from "next/cache";
 import { startOfDay, endOfDay } from "date-fns";
 import { redirect } from "next/navigation";
 
-type ActionResult = { success: true } | { error: string };
-
-// Open cash registergetDashboardData
+// Open cash register
 export async function openRegister(formData: FormData) {
   const openingAmount = parseFloat(formData.get("openingAmount") as string);
   const notes = formData.get("notes") as string;
@@ -34,10 +32,11 @@ export async function openRegister(formData: FormData) {
     },
   });
 
-  redirect("/dashboard"); // ✅ Redirect on success
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
 }
 
-// Close cash register
+// Close cash register + redirect to summary
 export async function closeRegister(formData: FormData) {
   const closingAmount = parseFloat(formData.get("closingAmount") as string);
   const notes = formData.get("notes") as string;
@@ -51,24 +50,48 @@ export async function closeRegister(formData: FormData) {
 
   const register = await prisma.cashRegister.findFirst({
     where: { isOpen: true },
+    include: { openedBy: true },
   });
   if (!register) throw new Error("No hay caja abierta");
 
   const todayStart = startOfDay(new Date());
   const todayEnd = endOfDay(todayStart);
-  const cashSales = await prisma.order.aggregate({
-    where: {
-      createdAt: { gte: todayStart, lte: todayEnd },
-      status: "COMPLETED",
-    },
-    _sum: { cashAmount: true },
-  });
+
+  const [cashSales, yapeSales, voidRecords] = await Promise.all([
+    prisma.order.aggregate({
+      where: {
+        createdAt: { gte: todayStart, lte: todayEnd },
+        status: "COMPLETED",
+        paymentMethod: { in: ["CASH", "MIXED"] },
+      },
+      _sum: { cashAmount: true },
+    }),
+    prisma.order.aggregate({
+      where: {
+        createdAt: { gte: todayStart, lte: todayEnd },
+        status: "COMPLETED",
+        paymentMethod: { in: ["YAPE", "MIXED"] },
+      },
+      _sum: { yapeAmount: true },
+    }),
+    prisma.voidRecord.findMany({
+      where: { voidedAt: { gte: todayStart, lte: todayEnd } },
+      select: { amount: true },
+    }),
+  ]);
+
+  const totalCash = cashSales._sum.cashAmount || 0;
+  const totalYape = yapeSales._sum.yapeAmount || 0;
+  const totalSales = totalCash + totalYape;
+  const voidLoss = voidRecords.reduce((sum, v) => sum + v.amount, 0);
+  const expectedCash = totalCash + register.openingAmount;
+  const netBalance = totalSales - register.openingAmount;
 
   await prisma.cashRegister.update({
     where: { id: register.id },
     data: {
       closingAmount,
-      expectedAmount: (cashSales._sum.cashAmount || 0) + register.openingAmount,
+      expectedAmount: expectedCash,
       closedAt: new Date(),
       closedById: user.id,
       isOpen: false,
@@ -76,32 +99,44 @@ export async function closeRegister(formData: FormData) {
     },
   });
 
-  redirect("/dashboard");
+  revalidatePath("/dashboard");
+
+  // Redirect to summary with encoded data
+  redirect(
+    `/dashboard/close?data=${encodeURIComponent(
+      JSON.stringify({
+        openingAmount: register.openingAmount,
+        closingAmount,
+        totalCash,
+        totalYape,
+        totalSales,
+        voidLoss,
+        netBalance,
+        expectedCash,
+      })
+    )}`
+  );
 }
+
 // Get dashboard data
 export async function getDashboardData() {
   const user = await getCurrentUser();
   if (!user) throw new Error("No autorizado");
 
+  const todayStart = startOfDay(new Date());
   const [openRegister, todaySales, voidCount] = await Promise.all([
     prisma.cashRegister.findFirst({
       where: { isOpen: true },
       include: { openedBy: { select: { name: true } } },
     }),
     prisma.order.aggregate({
-      where: {
-        createdAt: { gte: startOfDay(new Date()) },
-        status: "COMPLETED",
-      },
+      where: { createdAt: { gte: todayStart }, status: "COMPLETED" },
       _sum: { total: true, cashAmount: true, yapeAmount: true },
       _count: { id: true },
     }),
-    prisma.voidRecord.count({
-      where: { voidedAt: { gte: startOfDay(new Date()) } },
-    }),
+    prisma.voidRecord.count({ where: { voidedAt: { gte: todayStart } } }),
   ]);
 
-  // ✅ Serialize openRegister
   const serializedRegister = openRegister
     ? {
         id: openRegister.id,
@@ -111,21 +146,16 @@ export async function getDashboardData() {
       }
     : null;
 
-  // ✅ Handle null sums safely
-  const safeSales = {
-    _sum: {
-      total: todaySales._sum.total || 0,
-      cashAmount: todaySales._sum.cashAmount || 0,
-      yapeAmount: todaySales._sum.yapeAmount || 0,
-    },
-    _count: {
-      id: todaySales._count.id,
-    },
-  };
-
   return {
     openRegister: serializedRegister,
-    todaySales: safeSales,
+    todaySales: {
+      _sum: {
+        total: todaySales._sum.total || 0,
+        cashAmount: todaySales._sum.cashAmount || 0,
+        yapeAmount: todaySales._sum.yapeAmount || 0,
+      },
+      _count: { id: todaySales._count.id },
+    },
     voidCount,
   };
 }

@@ -24,7 +24,6 @@ export default async function SettingsPage() {
           </Link>
         </div>
 
-        {/* Staff Management Card */}
         <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800 mb-2">Personal</h2>
           <p className="text-gray-600 text-sm mb-4">
@@ -45,7 +44,7 @@ export default async function SettingsPage() {
             Ver ventas diarias, items más vendidos y métodos de pago.
           </p>
           <Link
-            href="/reports"
+            href="settings/reports"
             className="inline-block px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white text-sm font-medium rounded-md transition"
           >
             Ver reportes
@@ -54,13 +53,9 @@ export default async function SettingsPage() {
 
         {/* System Settings (future) */}
         <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-800 mb-2">Sistema</h2>
-          <p className="text-gray-600 text-sm mb-4">
-            Configura Yape, horarios, y modo de operación.
-          </p>
-          <span className="inline-block px-4 py-2 bg-gray-300 text-gray-500 text-sm font-medium rounded-md cursor-not-allowed">
-            Próximamente
-          </span>
+          <h2 className="text-lg font-semibold text-gray-800 mb-2">Contacto</h2>
+          <p className="text-gray-600 text-sm mb-4">Whatssap 949316792</p>
+          <span className="inline-block px-4 py-2 bg-gray-300 text-gray-500 text-sm font-medium rounded-md cursor-not-allowed"></span>
         </div>
       </div>
     </div>

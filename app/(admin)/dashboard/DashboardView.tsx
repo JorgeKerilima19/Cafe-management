@@ -1,7 +1,7 @@
 // app/(admin)/dashboard/DashboardView.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { openRegister, closeRegister } from "./actions";
@@ -30,7 +30,16 @@ export default function DashboardView({
   const [openNotes, setOpenNotes] = useState("");
   const [closeNotes, setCloseNotes] = useState("");
 
-  // ✅ DO NOT DESTRUCTURE — avoid any naming risk
+  // ✅ Auto-fill closing amount when register is open
+  useEffect(() => {
+    if (initialData.openRegister) {
+      const cashSales = initialData.todaySales._sum.cashAmount || 0;
+      const expectedClosing =
+        initialData.openRegister.openingAmount + cashSales;
+      setCloseAmount(expectedClosing.toString());
+    }
+  }, [initialData]);
+
   const total = initialData.todaySales._sum.total;
   const cash = initialData.todaySales._sum.cashAmount;
   const yape = initialData.todaySales._sum.yapeAmount;
@@ -68,8 +77,15 @@ export default function DashboardView({
                 <span className="font-medium">Monto inicial:</span> S/{" "}
                 {initialData.openRegister.openingAmount.toFixed(2)}
               </p>
+              <p>
+                <span className="font-medium">Ventas en efectivo:</span> S/{" "}
+                {cash.toFixed(2)}
+              </p>
+              <p>
+                <span className="font-medium">Total esperado:</span> S/{" "}
+                {(initialData.openRegister.openingAmount + cash).toFixed(2)}
+              </p>
 
-              {/* ✅ SAFE: openRegister refers ONLY to imported function */}
               <form action={closeRegister} className="mt-4 space-y-3">
                 <input type="hidden" name="closingAmount" value={closeAmount} />
                 <input type="hidden" name="notes" value={closeNotes} />
@@ -145,7 +161,7 @@ export default function DashboardView({
           )}
         </div>
 
-        {/* Today's Summary */}
+        {/* Today's Summary (same as before) */}
         <div className="bg-white p-6 rounded-xl shadow-sm">
           <h2 className="text-lg font-bold mb-4">Resumen de Hoy</h2>
           <div className="space-y-3">
@@ -186,7 +202,7 @@ export default function DashboardView({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Link
           href="/orders"
           className="bg-blue-600 text-white p-4 rounded-lg text-center hover:bg-blue-700"

@@ -125,7 +125,7 @@ export default function CreateMenuItemForm({
           accept="image/*"
           onChange={handleFileChange}
           ref={fileInputRef}
-          className="text-sm text-gray-800"
+          className="text-sm text-gray-800 border-2 border-rose-700"
         />
         {imageBase64 && (
           <input type="hidden" name="imageBase64" value={imageBase64} />

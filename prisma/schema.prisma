@@ -154,3 +154,17 @@ model CashRegister {
 
   @@map("cash_registers")
 }
+
+model InventoryItem {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(255)
+  quantity  Float // Supports decimals (e.g., 2.5 kg)
+  unit      String   @db.VarChar(50) // kg, units, liters, etc.
+  category  String?  @db.VarChar(100) // Coffee, Milk, Cups, etc.
+  threshold Float    @default(0) // Alert when stock < this
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("inventory_items")
+}
