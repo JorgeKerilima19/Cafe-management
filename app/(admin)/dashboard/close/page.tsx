@@ -6,6 +6,5 @@ import CloseSummary from "./CloseSummary";
 export default async function ClosePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-
   return <CloseSummary />;
 }

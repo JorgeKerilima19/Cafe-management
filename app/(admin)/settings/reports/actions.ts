@@ -2,6 +2,42 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { startOfDay, endOfDay, getWeek, getYear } from "date-fns";
+
+// ── Helpers: Date Range Calculations ───────────────────────────────────
+
+function getDateRangeInUTC(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  return { start, end };
+}
+
+function getWeeklyRange(year: number, week: number) {
+  const jan1 = new Date(Date.UTC(year, 0, 1));
+  const daysToMonday = (8 - (jan1.getUTCDay() || 7)) % 7;
+  const firstMonday = new Date(jan1);
+  firstMonday.setUTCDate(jan1.getUTCDate() + daysToMonday);
+
+  const targetMonday = new Date(firstMonday);
+  targetMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
+
+  const start = new Date(targetMonday);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(targetMonday);
+  end.setUTCDate(targetMonday.getUTCDate() + 6);
+  end.setUTCHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
+function getMonthlyRange(year: number, month: number) {
+  const start = new Date(Date.UTC(year, month, 1));
+  const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+  return { start, end };
+}
+
+// ── Sales Aggregation ──────────────────────────────────────────────────
 
 async function getReportTotal(startDate: Date, endDate: Date) {
   const result = await prisma.order.aggregate({
@@ -23,53 +59,68 @@ async function getReportTotal(startDate: Date, endDate: Date) {
   };
 }
 
-// Daily report (UTC-aligned)
+// ── Expense Aggregation ────────────────────────────────────────────────
+
+async function getExpenseTotal(startDate: Date, endDate: Date) {
+  const result = await prisma.dayExpense.aggregate({
+    where: { createdAt: { gte: startDate, lte: endDate } },
+    _sum: { cost: true },
+  });
+  return result._sum.cost || 0;
+}
+
+// ── Public Report APIs ─────────────────────────────────────────────────
+
 export async function getDailyReport(dateStr: string) {
   const { start, end } = getDateRangeInUTC(dateStr);
-  return await getReportTotal(start, end);
+  const [sales, expenses] = await Promise.all([
+    getReportTotal(start, end),
+    getExpenseTotal(start, end),
+  ]);
+  return { ...sales, expenses };
 }
 
-// Weekly report (Monday start, UTC-aligned)
 export async function getWeeklyReport(year: number, week: number) {
-  // Calculate Monday of week in UTC
-  const jan1 = new Date(Date.UTC(year, 0, 1));
-  const daysToMonday = (8 - (jan1.getUTCDay() || 7)) % 7;
-  const firstMonday = new Date(jan1);
-  firstMonday.setUTCDate(jan1.getUTCDate() + daysToMonday);
-
-  const targetMonday = new Date(firstMonday);
-  targetMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
-
-  const start = new Date(targetMonday);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(targetMonday);
-  end.setUTCDate(targetMonday.getUTCDate() + 6);
-  end.setUTCHours(23, 59, 59, 999);
-
-  const data = await getReportTotal(start, end);
+  const { start, end } = getWeeklyRange(year, week);
+  const [sales, expenses] = await Promise.all([
+    getReportTotal(start, end),
+    getExpenseTotal(start, end),
+  ]);
   return {
     start: start.toISOString().split("T")[0],
     end: end.toISOString().split("T")[0],
-    data,
+    data: { ...sales, expenses },
   };
 }
 
-// Monthly report (UTC-aligned)
 export async function getMonthlyReport(year: number, month: number) {
-  const start = new Date(Date.UTC(year, month, 1));
-  const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-  const data = await getReportTotal(start, end);
+  const { start, end } = getMonthlyRange(year, month);
+  const [sales, expenses] = await Promise.all([
+    getReportTotal(start, end),
+    getExpenseTotal(start, end),
+  ]);
   return {
     start: start.toISOString().split("T")[0],
     end: end.toISOString().split("T")[0],
-    data,
+    data: { ...sales, expenses },
   };
 }
+
+// ── Orders & Voids ─────────────────────────────────────────────────────
+
 export async function getOrdersForPeriod(
-  type: "daily" | "weekly" | "monthly",
-  ...args: string[]
+  periodType: "daily" | "weekly" | "monthly",
+  ...args: (string | number)[]
 ) {
-  const { start, end } = getDateRangeFromParams(type, ...args);
+  let start: Date, end: Date;
+
+  if (periodType === "daily") {
+    ({ start, end } = getDateRangeInUTC(args[0] as string));
+  } else if (periodType === "weekly") {
+    ({ start, end } = getWeeklyRange(args[0] as number, args[1] as number));
+  } else {
+    ({ start, end } = getMonthlyRange(args[0] as number, args[1] as number));
+  }
 
   const orders = await prisma.order.findMany({
     where: { createdAt: { gte: start, lte: end } },
@@ -84,66 +135,55 @@ export async function getOrdersForPeriod(
     orderBy: { createdAt: "desc" },
   });
 
-  // ✅ Convert Date to string
   return orders.map((order) => ({
     ...order,
-    createdAt: order.createdAt.toISOString(), // ← Now it's a string
+    createdAt: order.createdAt.toISOString(),
   }));
 }
+
 export async function getVoidRecordsCount(
-  type: "daily" | "weekly" | "monthly",
+  periodType: "daily" | "weekly" | "monthly",
   ...args: (string | number)[]
 ) {
-  const { start, end } = getDateRangeFromParams(type, ...args);
+  let start: Date, end: Date;
 
-  return await prisma.voidRecord.count({
+  if (periodType === "daily") {
+    ({ start, end } = getDateRangeInUTC(args[0] as string));
+  } else if (periodType === "weekly") {
+    ({ start, end } = getWeeklyRange(args[0] as number, args[1] as number));
+  } else {
+    ({ start, end } = getMonthlyRange(args[0] as number, args[1] as number));
+  }
+
+  return prisma.voidRecord.count({
     where: { voidedAt: { gte: start, lte: end } },
   });
 }
 
-// Helper to get date range based on period type
-// Helper: Parse "YYYY-MM-DD" as UTC day
-function getDateRangeInUTC(dateStr: string) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-  return { start, end };
-}
-
-// Helper to get date range based on period type
-function getDateRangeFromParams(
-  type: "daily" | "weekly" | "monthly",
+export async function getExpensesForPeriod(
+  periodType: "daily" | "weekly" | "monthly",
   ...args: (string | number)[]
-): { start: Date; end: Date } {
-  // ✅ Explicit return type
-  if (type === "daily") {
-    return getDateRangeInUTC(args[0] as string);
-  } else if (type === "weekly") {
-    const year = parseInt(args[0] as string);
-    const week = parseInt(args[1] as string);
+) {
+  let start: Date, end: Date;
 
-    // Calculate Monday of week in UTC
-    const jan1 = new Date(Date.UTC(year, 0, 1));
-    const daysToMonday = (8 - (jan1.getUTCDay() || 7)) % 7;
-    const firstMonday = new Date(jan1);
-    firstMonday.setUTCDate(jan1.getUTCDate() + daysToMonday);
-
-    const targetMonday = new Date(firstMonday);
-    targetMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
-
-    const start = new Date(targetMonday);
-    start.setUTCHours(0, 0, 0, 0);
-    const end = new Date(targetMonday);
-    end.setUTCDate(targetMonday.getUTCDate() + 6);
-    end.setUTCHours(23, 59, 59, 999);
-
-    return { start, end };
+  if (periodType === "daily") {
+    ({ start, end } = getDateRangeInUTC(args[0] as string));
+  } else if (periodType === "weekly") {
+    ({ start, end } = getWeeklyRange(args[0] as number, args[1] as number));
   } else {
-    const year = parseInt(args[0] as string);
-    const month = parseInt(args[1] as string);
-
-    const start = new Date(Date.UTC(year, month, 1));
-    const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-    return { start, end };
+    ({ start, end } = getMonthlyRange(args[0] as number, args[1] as number));
   }
+
+  const expenses = await prisma.dayExpense.findMany({
+    where: { createdAt: { gte: start, lte: end } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return expenses.map((expense) => ({
+    id: expense.id,
+    name: expense.name,
+    cost: expense.cost,
+    notes: expense.notes,
+    createdAt: expense.createdAt.toISOString(),
+  }));
 }

@@ -10,6 +10,7 @@ import {
   getMonthlyReport,
   getOrdersForPeriod,
   getVoidRecordsCount,
+  getExpensesForPeriod, // ✅ Added
 } from "./actions";
 import Link from "next/link";
 
@@ -18,6 +19,7 @@ type ReportData = {
   total: number;
   cash: number;
   yape: number;
+  expenses: number;
   period: string;
 };
 
@@ -30,13 +32,20 @@ type OrderItem = {
   createdAt: string;
 };
 
+// ✅ New type for expenses
+type ExpenseItem = {
+  id: string;
+  name: string;
+  cost: number;
+  notes: string | null;
+  createdAt: string;
+};
+
 // Action functions
 async function fetchDailyReport(prevState: ReportData | null, date: string) {
   const result = await getDailyReport(date);
   return {
-    total: result.total,
-    cash: result.cash,
-    yape: result.yape,
+    ...result,
     period: `Día: ${format(new Date(date), "dd/MM/yyyy")}`,
   };
 }
@@ -48,9 +57,7 @@ async function fetchWeeklyReport(
   const { year, week } = payload;
   const result = await getWeeklyReport(year, week);
   return {
-    total: result.data.total,
-    cash: result.data.cash,
-    yape: result.data.yape,
+    ...result.data,
     period: `Semana del ${format(new Date(result.start), "dd/MM")} al ${format(
       new Date(result.end),
       "dd/MM/yyyy"
@@ -79,9 +86,7 @@ async function fetchMonthlyReport(
     "Diciembre",
   ];
   return {
-    total: result.data.total,
-    cash: result.data.cash,
-    yape: result.data.yape,
+    ...result.data,
     period: `${monthNames[month]} ${year}`,
   };
 }
@@ -101,7 +106,6 @@ export default function ReportsView() {
   const [monthYear, setMonthYear] = useState<number>(today.getFullYear());
   const [month, setMonth] = useState<number>(today.getMonth());
 
-  // Report data
   const [dailyReport, fetchDaily] = useActionState(fetchDailyReport, null);
   const [weeklyReport, fetchWeekly] = useActionState(fetchWeeklyReport, null);
   const [monthlyReport, fetchMonthly] = useActionState(
@@ -109,8 +113,8 @@ export default function ReportsView() {
     null
   );
 
-  // Orders data
   const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]); // ✅ Added
   const [voidCount, setVoidCount] = useState<number>(0);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -121,18 +125,19 @@ export default function ReportsView() {
     fetchDaily(selectedDate);
   }, []);
 
-  // Fetch report and orders when parameters change
+  // Fetch data when params change
   useEffect(() => {
     const fetchData = async () => {
       setLoadingOrders(true);
 
-      // Fetch report
       if (activeTab === "daily") {
         await fetchDaily(selectedDate);
         const ordersData = await getOrdersForPeriod("daily", selectedDate);
         const voids = await getVoidRecordsCount("daily", selectedDate);
+        const expenseData = await getExpensesForPeriod("daily", selectedDate); // ✅
         setOrders(ordersData);
         setVoidCount(voids);
+        setExpenses(expenseData); // ✅
       } else if (activeTab === "weekly") {
         await fetchWeekly({ year: weekYear, week: weekNumber });
         const ordersData = await getOrdersForPeriod(
@@ -141,8 +146,14 @@ export default function ReportsView() {
           weekNumber.toString()
         );
         const voids = await getVoidRecordsCount("weekly", weekYear, weekNumber);
+        const expenseData = await getExpensesForPeriod(
+          "weekly",
+          weekYear,
+          weekNumber
+        ); // ✅
         setOrders(ordersData);
         setVoidCount(voids);
+        setExpenses(expenseData); // ✅
       } else {
         await fetchMonthly({ year: monthYear, month });
         const ordersData = await getOrdersForPeriod(
@@ -151,8 +162,14 @@ export default function ReportsView() {
           month.toString()
         );
         const voids = await getVoidRecordsCount("monthly", monthYear, month);
+        const expenseData = await getExpensesForPeriod(
+          "monthly",
+          monthYear,
+          month
+        ); // ✅
         setOrders(ordersData);
         setVoidCount(voids);
+        setExpenses(expenseData); // ✅
       }
 
       setLoadingOrders(false);
@@ -227,7 +244,6 @@ export default function ReportsView() {
 
         {activeTab === "weekly" && (
           <div className="flex items-end gap-4">
-            {/* ... same weekly controls as before ... */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Año
@@ -291,7 +307,6 @@ export default function ReportsView() {
 
         {activeTab === "monthly" && (
           <div className="flex items-end gap-4">
-            {/* ... same monthly controls as before ... */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Año
@@ -425,6 +440,18 @@ export default function ReportsView() {
                 </span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-600">Gastos:</span>
+                <span className="font-bold text-rose-700">
+                  - S/ {currentReport.expenses.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t">
+                <span className="font-bold">Balance Neto:</span>
+                <span className="font-bold text-gray-800">
+                  S/ {(currentReport.total - currentReport.expenses).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-600">Efectivo:</span>
                 <span className="font-bold text-green-800">
                   S/ {currentReport.cash.toFixed(2)}
@@ -459,8 +486,65 @@ export default function ReportsView() {
         <div className="text-gray-600 mb-8">Cargando reporte...</div>
       )}
 
+      {/* ✅ Expenses Section */}
+      {expenses.length > 0 && (
+        <div className="mt-8 bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-bold text-gray-800">Gastos</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Concepto
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Monto
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Notas
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Hora
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {expenses.map((expense) => (
+                  <tr key={expense.id}>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-rose-700">
+                      {expense.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-bold">
+                        S/ {expense.cost.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">
+                      {expense.notes || "—"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {format(new Date(expense.createdAt), "HH:mm")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 py-3 bg-gray-50 flex justify-between items-center">
+            <span className="text-sm text-gray-700">
+              Total Gastos:{" "}
+              <span className="font-bold text-rose-700">
+                S/ {expenses.reduce((sum, e) => sum + e.cost, 0).toFixed(2)}
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Orders Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden mt-10">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-800">Pedidos</h2>
         </div>

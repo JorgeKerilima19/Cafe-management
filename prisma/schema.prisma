@@ -37,7 +37,7 @@ enum Role {
 /// ========================
 
 model MenuItem {
-  id          String   @id @default(cuid( ))
+  id          String   @id @default(cuid())
   name        String   @db.VarChar(255)
   description String?  @db.Text
   price       Float
@@ -54,71 +54,71 @@ model MenuItem {
 /// ORDERS
 /// ========================
 
-  model Order {
-    id            String  @id @default(cuid())
-    customerName  String? // e.g., "Mesa 3" or "Ana"
-    customerPhone String? // for Yape reference
+model Order {
+  id            String  @id @default(cuid())
+  customerName  String? // e.g., "Mesa 3" or "Ana"
+  customerPhone String? // for Yape reference
 
-    total      Float
-    cashAmount Float @default(0)
-    yapeAmount Float @default(0)
+  total      Float
+  cashAmount Float @default(0)
+  yapeAmount Float @default(0)
 
-    paymentMethod String // "CASH" | "YAPE" | "MIXED"
-    status        OrderStatus @default(PENDING)
+  paymentMethod String // "CASH" | "YAPE" | "MIXED"
+  status        OrderStatus @default(PENDING)
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    // Optional: staff who marked as paid/prepared
-    userId String?
-    user   User?   @relation(fields: [userId], references: [id])
+  // Optional: staff who marked as paid/prepared
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
-    items OrderItem[]
+  items OrderItem[]
 
-    voidRecords VoidRecord[]
-  }
+  voidRecords VoidRecord[]
+}
 
-  enum OrderStatus {
-    PENDING
-    PAID
-    PREPARING
-    READY
-    COMPLETED
-    CANCELLED
-  }
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
 
-  /// ========================
-  /// ORDER ITEMS (for item-level reporting)
-  /// ========================
+/// ========================
+/// ORDER ITEMS (for item-level reporting)
+/// ========================
 
-  model OrderItem {
-    id         String @id @default(cuid())
-    orderId    String
-    menuItemId String
+model OrderItem {
+  id         String @id @default(cuid())
+  orderId    String
+  menuItemId String
 
-    name     String  @db.VarChar(255)
-    price    Float
-    quantity Int     @default(1)
-    options  String?
+  name     String  @db.VarChar(255)
+  price    Float
+  quantity Int     @default(1)
+  options  String?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    order    Order    @relation(fields: [orderId], references: [id])
-    menuItem MenuItem @relation(fields: [menuItemId], references: [id])
-  }
+  order    Order    @relation(fields: [orderId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+}
 
-  model PendingOrder {
-    id            String   @id @default(cuid())
-    customerName  String
-    customerPhone String?
-    items         Json // Array of { id, name, price, quantity }
-    total         Float
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
+model PendingOrder {
+  id            String   @id @default(cuid())
+  customerName  String
+  customerPhone String?
+  items         Json // Array of { id, name, price, quantity }
+  total         Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-    // Optional: auto-delete old carts
-    @@map("pending_orders")
-  }
+  // Optional: auto-delete old carts
+  @@map("pending_orders")
+}
 
 model VoidRecord {
   id      String  @id @default(cuid())
@@ -167,4 +167,15 @@ model InventoryItem {
   updatedAt DateTime @updatedAt
 
   @@map("inventory_items")
+}
+
+model DayExpense {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(255)
+  cost      Float
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("day_expenses")
 }

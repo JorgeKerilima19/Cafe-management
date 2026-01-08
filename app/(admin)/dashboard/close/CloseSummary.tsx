@@ -14,13 +14,12 @@ type CloseData = {
   voidLoss: number;
   netBalance: number;
   expectedCash: number;
+  totalExpenses: number; // ✅ Added
 };
 
-// ✅ Helper to safely parse and validate data
 function parseCloseData(raw: string): CloseData | null {
   try {
     const data = JSON.parse(decodeURIComponent(raw));
-    // Validate all required numbers
     if (
       typeof data.openingAmount === "number" &&
       typeof data.closingAmount === "number" &&
@@ -29,7 +28,8 @@ function parseCloseData(raw: string): CloseData | null {
       typeof data.totalSales === "number" &&
       typeof data.voidLoss === "number" &&
       typeof data.netBalance === "number" &&
-      typeof data.expectedCash === "number"
+      typeof data.expectedCash === "number" &&
+      typeof data.totalExpenses === "number" // ✅ Validate
     ) {
       return data;
     }
@@ -60,7 +60,6 @@ export default function CloseSummary() {
     );
   }
 
-  // ✅ Safe to use .toFixed() now
   const {
     openingAmount,
     closingAmount,
@@ -70,6 +69,7 @@ export default function CloseSummary() {
     voidLoss,
     netBalance,
     expectedCash,
+    totalExpenses, // ✅ Destructure
   } = data;
   const cashPercentage = totalSales > 0 ? (totalCash / totalSales) * 100 : 0;
   const yapePercentage = totalSales > 0 ? (totalYape / totalSales) * 100 : 0;
@@ -132,6 +132,12 @@ export default function CloseSummary() {
               <span className="text-gray-600">Anulaciones (Pérdida):</span>
               <span className="font-bold text-red-800">
                 - S/ {voidLoss.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Gastos:</span>
+              <span className="font-bold text-rose-700">
+                - S/ {totalExpenses.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between pt-3 border-t">
