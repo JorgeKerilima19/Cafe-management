@@ -176,7 +176,7 @@ export default function OrderDashboard({
       }
     };
 
-    const interval = setInterval(poll, 5000);
+    const interval = setInterval(poll, 2000);
     return () => clearInterval(interval);
   }, []);
 

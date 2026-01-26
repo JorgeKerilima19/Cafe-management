@@ -2,66 +2,71 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
+import { generateEscPosReceipt, printReceiptToPOS } from "@/lib/printer";
 
-export async function createOrder(formData: FormData) {
-  const itemsStr = formData.get("items");
-  const totalStr = formData.get("total");
-  const customerName = formData.get("customerName") as string;
-  const paymentMethod = formData.get("paymentMethod") as string;
-  const cashAmount = formData.get("cashAmount") as string;
-  const yapeAmount = formData.get("yapeAmount") as string;
-
-  if (!itemsStr || !totalStr || !customerName?.trim() || !paymentMethod) {
-    throw new Error("Datos incompletos");
-  }
-
-  let items, total, cash, yape;
+export async function createOrder(
+  _: any,
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
   try {
-    items = JSON.parse(itemsStr as string);
-    total = parseFloat(totalStr as string);
-    cash = parseFloat(cashAmount) || 0;
-    yape = parseFloat(yapeAmount) || 0;
-  } catch {
-    throw new Error("Datos inválidos");
-  }
+    const itemsStr = formData.get("items");
+    const totalStr = formData.get("total");
+    const customerName = formData.get("customerName") as string;
+    const paymentMethod = formData.get("paymentMethod") as string;
+    const cashAmount = formData.get("cashAmount") as string;
+    const yapeAmount = formData.get("yapeAmount") as string;
 
-  if (total <= 0 || items.length === 0) {
-    throw new Error("Pedido vacío");
-  }
+    if (!itemsStr || !totalStr || !customerName) {
+      return { success: false, error: "Datos incompletos" };
+    }
 
-  // Validate menu items exist
-  const menuItemIds = items.map((item: any) => item.id);
-  const existingItems = await prisma.menuItem.findMany({
-    where: { id: { in: menuItemIds } },
-    select: { id: true },
-  });
+    const items = JSON.parse(itemsStr as string);
+    const total = parseFloat(totalStr as string);
+    const cash = parseFloat(cashAmount) || 0;
+    const yape = parseFloat(yapeAmount) || 0;
 
-  if (existingItems.length !== menuItemIds.length) {
-    throw new Error("Item no disponible");
-  }
+    if (!items.length || total <= 0) {
+      return { success: false, error: "Pedido inválido" };
+    }
 
-  //  CREATE ORDER
-  await prisma.order.create({
-    data: {
-      customerName: customerName.trim(),
-      customerPhone: null,
-      total,
-      cashAmount: cash,
-      yapeAmount: yape,
-      paymentMethod,
-      status: "PENDING",
-      items: {
-        create: items.map((item: any) => ({
-          menuItemId: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-        })),
+    // Save order
+    const order = await prisma.order.create({
+      data: {
+        customerName: customerName.trim(),
+        total,
+        cashAmount: cash,
+        yapeAmount: yape,
+        paymentMethod,
+        status: "PENDING",
+        items: {
+          create: items.map((item: any) => ({
+            menuItemId: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+        },
       },
-    },
-  });
+    });
 
-  // REDIRECT — NO TRY/CATCH!
-  redirect("/menu/thank-you");
+    // Generate and print receipt
+    const receipt = generateEscPosReceipt(
+      customerName.trim(),
+      items,
+      total,
+      paymentMethod,
+      cash,
+      yape,
+    );
+
+    await printReceiptToPOS(receipt);
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("💥 [createOrder] ERROR:", err);
+    return {
+      success: false,
+      error: err.message || "Error al procesar el pedido",
+    };
+  }
 }

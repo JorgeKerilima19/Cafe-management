@@ -5,15 +5,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
-// ✅ Use ONE consistent cookie name
+//  Use ONE consistent cookie name
 const SESSION_COOKIE_NAME = "user_id"; // ← Changed from "cafeteria_session"
 
 export async function createSession(userId: string): Promise<void> {
   (await cookies()).set({
-    name: SESSION_COOKIE_NAME, // ✅ Now matches
+    name: SESSION_COOKIE_NAME, //  Now matches
     value: userId,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: false,
     maxAge: 60 * 60 * 24 * 7, // 1 week
     path: "/",
   });
@@ -53,7 +53,7 @@ export async function requireAdmin() {
   return user;
 }
 
-// ✅ Use the same cookie name here
+//  Use the same cookie name here
 async function getSessionUserId() {
   const cookieStore = await cookies();
   return cookieStore.get(SESSION_COOKIE_NAME)?.value || null;

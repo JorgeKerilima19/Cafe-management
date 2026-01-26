@@ -3,14 +3,20 @@
 
 import { createOrder } from "../actions";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useActionState } from "react";
 
 type CartItem = {
   id: string;
   name: string;
   price: number;
   quantity: number;
+};
+
+type ActionResult = {
+  success: boolean;
+  error?: string;
 };
 
 export default function CheckoutClient() {
@@ -22,11 +28,18 @@ export default function CheckoutClient() {
     total: number;
   } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "YAPE" | "MIXED">(
-    "CASH"
+    "CASH",
   );
   const [cashAmount, setCashAmount] = useState<string>("");
   const [yapeAmount, setYapeAmount] = useState<string>("");
   const [customerName, setCustomerName] = useState<string>("");
+
+  const [state, formAction] = useActionState<ActionResult, FormData>(
+    createOrder,
+    {
+      success: false,
+    },
+  );
 
   useEffect(() => {
     if (!cartParam) {
@@ -43,6 +56,15 @@ export default function CheckoutClient() {
       router.push("/menu");
     }
   }, [cartParam, router]);
+
+  useEffect(() => {
+    if (state.success) {
+      const timer = setTimeout(() => {
+        router.push("/menu/thank-you");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.success, router]);
 
   if (!cartData) return null;
 
@@ -80,6 +102,18 @@ export default function CheckoutClient() {
           Confirmar Pedido
         </h1>
 
+        {state?.error && (
+          <div className="p-4 mb-4 bg-red-100 text-red-800 rounded-lg">
+            ❌ {state.error}
+          </div>
+        )}
+
+        {state?.success && (
+          <div className="p-4 mb-4 bg-green-100 text-green-800 rounded-lg">
+            ✅ ¡Pedido confirmado e impreso! Redirigiendo...
+          </div>
+        )}
+
         <div className="bg-white rounded-xl p-4 mb-6">
           <h2 className="font-bold text-lg mb-3">Tu Pedido</h2>
           {items.map((item, idx) => (
@@ -101,7 +135,6 @@ export default function CheckoutClient() {
           </div>
         </div>
 
-        {/* ✅ Static Yape QR Code */}
         {showYapeQr && (
           <div className="bg-white rounded-xl p-4 mb-6 border border-blue-200">
             <h2 className="font-bold text-lg mb-3 text-blue-800">
@@ -125,8 +158,7 @@ export default function CheckoutClient() {
           </div>
         )}
 
-        <form action={createOrder} method="post" className="space-y-4">
-          {/* Hidden fields */}
+        <form action={formAction} className="space-y-4">
           <input type="hidden" name="items" value={JSON.stringify(items)} />
           <input type="hidden" name="total" value={total.toString()} />
           <input type="hidden" name="paymentMethod" value={paymentMethod} />
@@ -162,8 +194,8 @@ export default function CheckoutClient() {
                   {method === "CASH"
                     ? "Efectivo"
                     : method === "YAPE"
-                    ? "Yape"
-                    : "Mixto"}
+                      ? "Yape"
+                      : "Mixto"}
                 </button>
               ))}
             </div>
@@ -202,9 +234,14 @@ export default function CheckoutClient() {
 
           <button
             type="submit"
-            className="w-full bg-rose-700 hover:bg-rose-800 text-white py-3 rounded-lg font-bold"
+            disabled={state?.success}
+            className={`w-full py-3 rounded-lg font-bold ${
+              state?.success
+                ? "bg-green-500 cursor-not-allowed"
+                : "bg-rose-700 hover:bg-rose-800 text-white"
+            }`}
           >
-            Confirmar Pago
+            {state?.success ? "¡Listo!" : "Confirmar Pago"}
           </button>
         </form>
       </div>

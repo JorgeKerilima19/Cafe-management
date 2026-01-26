@@ -2,6 +2,8 @@
 import { prisma } from "@/lib/prisma";
 import MenuView from "./MenuView";
 
+export const dynamic = "force-dynamic";
+
 export default async function MenuPage() {
   const [items, categoryData] = await Promise.all([
     prisma.menuItem.findMany({
