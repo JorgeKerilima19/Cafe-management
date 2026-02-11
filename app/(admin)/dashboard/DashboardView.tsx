@@ -58,6 +58,8 @@ export default function DashboardView({
   const orderCount = initialData.todaySales._count.id;
   const expenseTotal = initialData.todayExpenses.total;
 
+  const balance = total - expenseTotal;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">
@@ -89,6 +91,10 @@ export default function DashboardView({
               <p>
                 <span className="font-medium">Monto inicial:</span> S/{" "}
                 {initialData.openRegister.openingAmount.toFixed(2)}
+              </p>
+              <p>
+                <span className="font-medium">Ventas en Yape:</span> S/{" "}
+                {yape.toFixed(2)}
               </p>
               <p>
                 <span className="font-medium">Ventas en efectivo:</span> S/{" "}
@@ -275,6 +281,12 @@ export default function DashboardView({
             <div className="flex justify-between">
               <span className="text-gray-600">Pedidos:</span>
               <span className="font-bold text-gray-800">{orderCount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600 font-bold">Balance Total:</span>
+              <span className="font-bold text-gray-800">
+                {balance.toFixed(2)}
+              </span>
             </div>
             {initialData.voidCount > 0 && (
               <div className="flex justify-between">

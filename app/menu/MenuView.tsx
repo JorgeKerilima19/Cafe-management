@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import logo from "@/public/logo.png";
 
 type MenuItem = {
   id: string;
@@ -30,12 +30,15 @@ export default function MenuView({
     : initialItems;
 
   const categoriesToShow = Array.from(
-    new Set(filteredItems.map((i) => i.category))
+    new Set(filteredItems.map((i) => i.category)),
   );
-  const itemsByCategory = categoriesToShow.reduce((acc, cat) => {
-    acc[cat] = filteredItems.filter((item) => item.category === cat);
-    return acc;
-  }, {} as Record<string, MenuItem[]>);
+  const itemsByCategory = categoriesToShow.reduce(
+    (acc, cat) => {
+      acc[cat] = filteredItems.filter((item) => item.category === cat);
+      return acc;
+    },
+    {} as Record<string, MenuItem[]>,
+  );
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const safeCart = cart.map(({ id, name, price, quantity }) => ({
@@ -50,7 +53,7 @@ export default function MenuView({
       const existing = prev.find((i) => i.id === item.id);
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
         );
       }
       return [...prev, { ...item, quantity: 1 }];
@@ -60,8 +63,8 @@ export default function MenuView({
   const increaseQty = (id: string) => {
     setCart((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
+        item.id === id ? { ...item, quantity: item.quantity + 1 } : item,
+      ),
     );
   };
 
@@ -71,9 +74,9 @@ export default function MenuView({
         .map((item) =>
           item.id === id && item.quantity > 1
             ? { ...item, quantity: item.quantity - 1 }
-            : item
+            : item,
         )
-        .filter((item) => item.quantity > 0)
+        .filter((item) => item.quantity > 0),
     );
   };
 
@@ -90,15 +93,13 @@ export default function MenuView({
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">Menú</h1>
-          <Link href="/" className="text-rose-700 hover:text-rose-800 text-sm">
-            ← Inicio
-          </Link>
+          <img src={logo.src} alt="logo" className="h-28 w-auto object-cover" />
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col-reverse lg:flex-row gap-6">
         <div className="lg:w-3/4">
           <div className="flex flex-wrap gap-2 mb-6">
             <button
