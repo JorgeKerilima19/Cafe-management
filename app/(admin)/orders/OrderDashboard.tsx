@@ -3,8 +3,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { format, differenceInMinutes } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { completeOrder, getTodaysOrders } from "./actions";
 import VoidModal from "./VoidModal";
+
+const TIMEZONE = "America/Lima";
 
 type OrderItem = {
   name: string;
@@ -25,7 +28,7 @@ type Order = {
   items: OrderItem[];
 };
 
-// ✅ Helper: format payment method
+// Helper: format payment method
 const getPaymentMethodDisplay = (method: string) => {
   switch (method) {
     case "CASH":
@@ -39,7 +42,19 @@ const getPaymentMethodDisplay = (method: string) => {
   }
 };
 
-// ✅ Print function
+function formatLimaTime(date: Date, formatStr: string = "HH:mm") {
+  const limaDate = toZonedTime(date, TIMEZONE);
+  return format(limaDate, formatStr);
+}
+
+function getMinutesSinceLima(orderCreatedAt: Date) {
+  const now = new Date();
+  const limaNow = toZonedTime(now, TIMEZONE);
+  const limaOrder = toZonedTime(orderCreatedAt, TIMEZONE);
+  return differenceInMinutes(limaNow, limaOrder);
+}
+
+// Print function
 function printReceipt(order: Order) {
   const iframe = document.createElement("iframe");
   iframe.style.display = "none";
@@ -67,7 +82,7 @@ function printReceipt(order: Order) {
     <body>
       <div class="header">
         <h2>Cafetería La Goutte</h2>
-        <p>${format(order.createdAt, "dd/MM/yyyy HH:mm")}</p>
+        <p>${formatLimaTime(order.createdAt, "dd/MM/yyyy HH:mm")}</p>
       </div>
       <p>${order.customerName || "Pedido"}</p>
       
@@ -82,9 +97,9 @@ function printReceipt(order: Order) {
                     <span>S/ ${(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                   <div class="item-details">
-                    <span>  ${item.quantity} × S/ ${item.price.toFixed(2)}</span>
+                    <span>  ${item.quantity} × S/ ${item.price.toFixed(2)}</span>
                   </div>
-                `
+                `,
                 )
                 .join("")
             : '<div class="item"><span>Sin detalles</span></div>'
@@ -98,7 +113,7 @@ function printReceipt(order: Order) {
         ${
           order.paymentMethod === "MIXED"
             ? `<br>Efectivo: S/ ${order.cashAmount.toFixed(
-                2
+                2,
               )} | Yape: S/ ${order.yapeAmount.toFixed(2)}`
             : ""
         }
@@ -143,7 +158,7 @@ export default function OrderDashboard({
         const newOrders = await getTodaysOrders();
         const newOrderIds = new Set(newOrders.map((o) => o.id));
         const isNewOrder = newOrders.some(
-          (order) => !previousOrderIds.current.has(order.id)
+          (order) => !previousOrderIds.current.has(order.id),
         );
 
         if (isNewOrder && audioRef.current) {
@@ -155,7 +170,7 @@ export default function OrderDashboard({
         const mergedOrders = [...orders];
         for (const newOrder of newOrders) {
           const existingIndex = mergedOrders.findIndex(
-            (o) => o.id === newOrder.id
+            (o) => o.id === newOrder.id,
           );
           if (existingIndex === -1) {
             mergedOrders.push(newOrder);
@@ -165,7 +180,7 @@ export default function OrderDashboard({
         }
 
         mergedOrders.sort(
-          (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+          (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
         );
 
         setOrders(mergedOrders);
@@ -180,18 +195,19 @@ export default function OrderDashboard({
     return () => clearInterval(interval);
   }, []);
 
+  // Updated to use Lima timezone
   const getOrderBgColor = (createdAt: Date) => {
-    const minutes = differenceInMinutes(new Date(), createdAt);
+    const minutes = getMinutesSinceLima(createdAt);
     if (minutes < 5) return "bg-green-50";
     if (minutes < 10) return "bg-yellow-50";
     return "bg-red-50";
   };
 
   const pendingOrders = orders.filter(
-    (o) => o.status !== "COMPLETED" && o.status !== "CANCELLED"
+    (o) => o.status !== "COMPLETED" && o.status !== "CANCELLED",
   );
   const completedOrders = orders.filter(
-    (o) => o.status === "COMPLETED" || o.status === "CANCELLED"
+    (o) => o.status === "COMPLETED" || o.status === "CANCELLED",
   );
 
   return (
@@ -199,7 +215,7 @@ export default function OrderDashboard({
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Pedidos de Hoy</h1>
         <div className="text-sm text-gray-600" suppressHydrationWarning>
-          Última actualización: {format(lastFetchTime, "HH:mm:ss")}
+          Última actualización: {formatLimaTime(lastFetchTime, "HH:mm:ss")}
         </div>
       </div>
 
@@ -215,7 +231,7 @@ export default function OrderDashboard({
             <div
               key={order.id}
               className={`p-4 rounded-lg border ${getOrderBgColor(
-                order.createdAt
+                order.createdAt,
               )}`}
             >
               <div className="flex justify-between items-start">
@@ -224,7 +240,7 @@ export default function OrderDashboard({
                     {order.customerName || "Pedido"}
                   </h3>
                   <p className="text-gray-600 text-sm">
-                    {format(order.createdAt, "HH:mm")}
+                    {formatLimaTime(order.createdAt, "HH:mm")}
                   </p>
                   <div className="mt-2">
                     <ul className="mt-1 space-y-1">
@@ -236,7 +252,6 @@ export default function OrderDashboard({
                       ))}
                     </ul>
                   </div>
-                  {/* ✅ LARGER Payment Method & Amounts */}
                   <div className="mt-2 pt-2 border-t border-gray-200">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-medium text-gray-700">
@@ -247,8 +262,8 @@ export default function OrderDashboard({
                           order.paymentMethod === "CASH"
                             ? "bg-green-200 text-green-800"
                             : order.paymentMethod === "YAPE"
-                            ? "bg-purple-200 text-purple-800"
-                            : "bg-blue-200 text-blue-800"
+                              ? "bg-purple-200 text-purple-800"
+                              : "bg-blue-200 text-blue-800"
                         }`}
                       >
                         {getPaymentMethodDisplay(order.paymentMethod)}
@@ -285,12 +300,12 @@ export default function OrderDashboard({
                       order.status === "PENDING"
                         ? "bg-gray-200 text-gray-800"
                         : order.status === "PAID"
-                        ? "bg-blue-200 text-blue-800"
-                        : order.status === "PREPARING"
-                        ? "bg-purple-200 text-purple-800"
-                        : order.status === "READY"
-                        ? "bg-orange-200 text-orange-800"
-                        : "bg-green-200 text-green-800"
+                          ? "bg-blue-200 text-blue-800"
+                          : order.status === "PREPARING"
+                            ? "bg-purple-200 text-purple-800"
+                            : order.status === "READY"
+                              ? "bg-orange-200 text-orange-800"
+                              : "bg-green-200 text-green-800"
                     }`}
                   >
                     {order.status}
@@ -315,7 +330,6 @@ export default function OrderDashboard({
                   >
                     Anular
                   </button>
-                  {/* ✅ Print button for pending orders */}
                   <button
                     type="button"
                     onClick={() => printReceipt(order)}
@@ -369,8 +383,8 @@ export default function OrderDashboard({
                           order.paymentMethod === "CASH"
                             ? "bg-green-200 text-green-800"
                             : order.paymentMethod === "YAPE"
-                            ? "bg-purple-200 text-purple-800"
-                            : "bg-blue-200 text-blue-800"
+                              ? "bg-purple-200 text-purple-800"
+                              : "bg-blue-200 text-blue-800"
                         }`}
                       >
                         {getPaymentMethodDisplay(order.paymentMethod)}
@@ -399,7 +413,7 @@ export default function OrderDashboard({
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {format(order.createdAt, "HH:mm")}
+                      {formatLimaTime(order.createdAt, "HH:mm")}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2 items-center">

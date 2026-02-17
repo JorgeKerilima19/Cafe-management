@@ -4,15 +4,18 @@
 import { useState, useEffect } from "react";
 import { format, getWeek, getYear } from "date-fns";
 import { useActionState } from "react";
+import { toZonedTime } from "date-fns-tz";
 import {
   getDailyReport,
   getWeeklyReport,
   getMonthlyReport,
   getOrdersForPeriod,
   getVoidRecordsCount,
-  getExpensesForPeriod, // ✅ Added
+  getExpensesForPeriod,
 } from "./actions";
 import Link from "next/link";
+
+const TIMEZONE = "America/Lima";
 
 // Types
 type ReportData = {
@@ -32,7 +35,6 @@ type OrderItem = {
   createdAt: string;
 };
 
-// ✅ New type for expenses
 type ExpenseItem = {
   id: string;
   name: string;
@@ -41,33 +43,46 @@ type ExpenseItem = {
   createdAt: string;
 };
 
+// ✅ Helper: Get today's date in Lima timezone as YYYY-MM-DD string
+function getTodayLimaDateString() {
+  const now = new Date();
+  const limaDate = toZonedTime(now, TIMEZONE);
+  return format(limaDate, "yyyy-MM-dd");
+}
+
+// ✅ Helper: Format date string for display (input is YYYY-MM-DD)
+function formatDateForDisplay(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return format(date, "dd/MM/yyyy");
+}
+
 // Action functions
 async function fetchDailyReport(prevState: ReportData | null, date: string) {
   const result = await getDailyReport(date);
   return {
     ...result,
-    period: `Día: ${format(new Date(date), "dd/MM/yyyy")}`,
+    period: `Día: ${formatDateForDisplay(date)}`,
   };
 }
 
 async function fetchWeeklyReport(
   prevState: ReportData | null,
-  payload: { year: number; week: number }
+  payload: { year: number; week: number },
 ) {
   const { year, week } = payload;
   const result = await getWeeklyReport(year, week);
   return {
     ...result.data,
-    period: `Semana del ${format(new Date(result.start), "dd/MM")} al ${format(
-      new Date(result.end),
-      "dd/MM/yyyy"
+    period: `Semana del ${formatDateForDisplay(result.start)} al ${formatDateForDisplay(
+      result.end,
     )}`,
   };
 }
 
 async function fetchMonthlyReport(
   prevState: ReportData | null,
-  payload: { year: number; month: number }
+  payload: { year: number; month: number },
 ) {
   const { year, month } = payload;
   const result = await getMonthlyReport(year, month);
@@ -91,17 +106,23 @@ async function fetchMonthlyReport(
   };
 }
 
+// ✅ Helper: format time in Lima timezone
+function formatLimaTime(date: Date | string, formatStr: string = "HH:mm") {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return format(toZonedTime(d, TIMEZONE), formatStr);
+}
+
 export default function ReportsView() {
   const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly">(
-    "daily"
+    "daily",
   );
   const [selectedDate, setSelectedDate] = useState<string>(
-    format(new Date(), "yyyy-MM-dd")
+    getTodayLimaDateString(),
   );
-  const today = new Date();
+  const today = toZonedTime(new Date(), TIMEZONE);
   const [weekYear, setWeekYear] = useState<number>(getYear(today));
   const [weekNumber, setWeekNumber] = useState<number>(
-    getWeek(today, { weekStartsOn: 1 })
+    getWeek(today, { weekStartsOn: 1 }),
   );
   const [monthYear, setMonthYear] = useState<number>(today.getFullYear());
   const [month, setMonth] = useState<number>(today.getMonth());
@@ -110,11 +131,11 @@ export default function ReportsView() {
   const [weeklyReport, fetchWeekly] = useActionState(fetchWeeklyReport, null);
   const [monthlyReport, fetchMonthly] = useActionState(
     fetchMonthlyReport,
-    null
+    null,
   );
 
   const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseItem[]>([]); // ✅ Added
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [voidCount, setVoidCount] = useState<number>(0);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -134,42 +155,42 @@ export default function ReportsView() {
         await fetchDaily(selectedDate);
         const ordersData = await getOrdersForPeriod("daily", selectedDate);
         const voids = await getVoidRecordsCount("daily", selectedDate);
-        const expenseData = await getExpensesForPeriod("daily", selectedDate); // ✅
+        const expenseData = await getExpensesForPeriod("daily", selectedDate);
         setOrders(ordersData);
         setVoidCount(voids);
-        setExpenses(expenseData); // ✅
+        setExpenses(expenseData);
       } else if (activeTab === "weekly") {
         await fetchWeekly({ year: weekYear, week: weekNumber });
         const ordersData = await getOrdersForPeriod(
           "weekly",
           weekYear.toString(),
-          weekNumber.toString()
+          weekNumber.toString(),
         );
         const voids = await getVoidRecordsCount("weekly", weekYear, weekNumber);
         const expenseData = await getExpensesForPeriod(
           "weekly",
           weekYear,
-          weekNumber
-        ); // ✅
+          weekNumber,
+        );
         setOrders(ordersData);
         setVoidCount(voids);
-        setExpenses(expenseData); // ✅
+        setExpenses(expenseData);
       } else {
         await fetchMonthly({ year: monthYear, month });
         const ordersData = await getOrdersForPeriod(
           "monthly",
           monthYear.toString(),
-          month.toString()
+          month.toString(),
         );
         const voids = await getVoidRecordsCount("monthly", monthYear, month);
         const expenseData = await getExpensesForPeriod(
           "monthly",
           monthYear,
-          month
-        ); // ✅
+          month,
+        );
         setOrders(ordersData);
         setVoidCount(voids);
-        setExpenses(expenseData); // ✅
+        setExpenses(expenseData);
       }
 
       setLoadingOrders(false);
@@ -183,8 +204,8 @@ export default function ReportsView() {
     activeTab === "daily"
       ? dailyReport
       : activeTab === "weekly"
-      ? weeklyReport
-      : monthlyReport;
+        ? weeklyReport
+        : monthlyReport;
 
   // Pagination
   const totalPages = Math.ceil(orders.length / ordersPerPage);
@@ -220,8 +241,8 @@ export default function ReportsView() {
             {tab === "daily"
               ? "Diario"
               : tab === "weekly"
-              ? "Semanal"
-              : "Mensual"}
+                ? "Semanal"
+                : "Mensual"}
           </button>
         ))}
       </div>
@@ -274,7 +295,11 @@ export default function ReportsView() {
                   const prevWeek = new Date(weekYear, 0, 1);
                   prevWeek.setDate(prevWeek.getDate() - 7);
                   setWeekYear(prevWeek.getFullYear());
-                  setWeekNumber(getWeek(prevWeek, { weekStartsOn: 1 }));
+                  setWeekNumber(
+                    getWeek(toZonedTime(prevWeek, TIMEZONE), {
+                      weekStartsOn: 1,
+                    }),
+                  );
                 }}
                 className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
               >
@@ -282,7 +307,7 @@ export default function ReportsView() {
               </button>
               <button
                 onClick={() => {
-                  const today = new Date();
+                  const today = toZonedTime(new Date(), TIMEZONE);
                   setWeekYear(getYear(today));
                   setWeekNumber(getWeek(today, { weekStartsOn: 1 }));
                 }}
@@ -295,7 +320,11 @@ export default function ReportsView() {
                   const nextWeek = new Date(weekYear, 0, 1);
                   nextWeek.setDate(nextWeek.getDate() + 7);
                   setWeekYear(nextWeek.getFullYear());
-                  setWeekNumber(getWeek(nextWeek, { weekStartsOn: 1 }));
+                  setWeekNumber(
+                    getWeek(toZonedTime(nextWeek, TIMEZONE), {
+                      weekStartsOn: 1,
+                    }),
+                  );
                 }}
                 className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
               >
@@ -361,7 +390,7 @@ export default function ReportsView() {
               </button>
               <button
                 onClick={() => {
-                  const today = new Date();
+                  const today = toZonedTime(new Date(), TIMEZONE);
                   setMonthYear(today.getFullYear());
                   setMonth(today.getMonth());
                 }}
@@ -486,7 +515,7 @@ export default function ReportsView() {
         <div className="text-gray-600 mb-8">Cargando reporte...</div>
       )}
 
-      {/* ✅ Expenses Section */}
+      {/* Expenses Section */}
       {expenses.length > 0 && (
         <div className="mt-8 bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -525,7 +554,7 @@ export default function ReportsView() {
                       {expense.notes || "—"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {format(new Date(expense.createdAt), "HH:mm")}
+                      {formatLimaTime(expense.createdAt, "HH:mm")}
                     </td>
                   </tr>
                 ))}
@@ -600,15 +629,15 @@ export default function ReportsView() {
                             order.paymentMethod === "CASH"
                               ? "bg-green-100 text-green-800"
                               : order.paymentMethod === "YAPE"
-                              ? "bg-purple-100 text-purple-800"
-                              : "bg-blue-100 text-blue-800"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-blue-100 text-blue-800"
                           }`}
                         >
                           {order.paymentMethod === "CASH"
                             ? "Efectivo"
                             : order.paymentMethod === "YAPE"
-                            ? "Yape"
-                            : "Mixto"}
+                              ? "Yape"
+                              : "Mixto"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -617,19 +646,19 @@ export default function ReportsView() {
                             order.status === "COMPLETED"
                               ? "bg-green-100 text-green-800"
                               : order.status === "CANCELLED"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
                           {order.status === "COMPLETED"
                             ? "Completado"
                             : order.status === "CANCELLED"
-                            ? "Anulado"
-                            : "Pendiente"}
+                              ? "Anulado"
+                              : "Pendiente"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {format(new Date(order.createdAt), "HH:mm")}
+                        {formatLimaTime(order.createdAt, "HH:mm")}
                       </td>
                     </tr>
                   ))}

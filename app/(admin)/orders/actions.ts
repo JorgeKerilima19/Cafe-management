@@ -2,11 +2,28 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { startOfDay } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { revalidatePath } from "next/cache";
 
+const TIMEZONE = "America/Lima";
+
+function getStartOfDayInLima() {
+  const now = new Date();
+  const limaNow = toZonedTime(now, TIMEZONE);
+
+  // Create date at midnight Lima time
+  const year = limaNow.getFullYear();
+  const month = limaNow.getMonth();
+  const day = limaNow.getDate();
+
+  const startOfDayLima = new Date(Date.UTC(year, month, day, 5, 0, 0, 0)); // UTC-5 for Lima
+
+  return startOfDayLima;
+}
+
 export async function getTodaysOrders() {
-  const start = startOfDay(new Date());
+  const start = getStartOfDayInLima();
+
   const orders = await prisma.order.findMany({
     where: {
       createdAt: { gte: start },
@@ -22,13 +39,11 @@ export async function getTodaysOrders() {
       paymentMethod: true,
       cashAmount: true,
       yapeAmount: true,
-      // ✅ Include user (even if null)
       user: {
         select: {
           name: true,
         },
       },
-      // ✅ Include items
       items: {
         select: {
           name: true,
@@ -40,6 +55,7 @@ export async function getTodaysOrders() {
   });
   return orders;
 }
+
 export async function completeOrder(formData: FormData) {
   const orderId = formData.get("orderId") as string;
   if (!orderId) throw new Error("ID requerido");
@@ -47,7 +63,7 @@ export async function completeOrder(formData: FormData) {
     where: { id: orderId },
     data: { status: "COMPLETED" },
   });
-  revalidatePath("/order");
+  revalidatePath("/orders");
 }
 
 export async function voidOrder(formData: FormData) {
@@ -58,12 +74,16 @@ export async function voidOrder(formData: FormData) {
   }
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Pedido no encontrado");
+
+  // Use Lima timezone for voidedAt
+  const voidedAt = toZonedTime(new Date(), TIMEZONE);
+
   await prisma.voidRecord.create({
     data: {
       orderId,
       amount: order.total,
       reason: reason.trim(),
-      voidedAt: new Date(),
+      voidedAt,
       voidedById: order.userId || null,
     },
   });
@@ -71,6 +91,6 @@ export async function voidOrder(formData: FormData) {
     where: { id: orderId },
     data: { status: "CANCELLED" },
   });
-  revalidatePath("/order");
+  revalidatePath("/orders");
   return { success: true };
 }

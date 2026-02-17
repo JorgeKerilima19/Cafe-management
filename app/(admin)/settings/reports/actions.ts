@@ -2,28 +2,45 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, getWeek, getYear } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 
-// ── Helpers: Date Range Calculations ───────────────────────────────────
+const TIMEZONE = "America/Lima";
 
-function getDateRangeInUTC(dateStr: string) {
+// ── Helpers: Date Range Calculations (in Lima Time) ───────────────────
+
+function getDateRangeInLima(dateStr: string) {
+  // Parse the date string as YYYY-MM-DD in Lima timezone
   const [year, month, day] = dateStr.split("-").map(Number);
-  const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+
+  // Create start of day (00:00:00) in Lima timezone
+  // Lima is UTC-5, so we create UTC date with 5 hours offset
+  const start = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
+
+  // Create end of day (23:59:59) in Lima timezone
   const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
   return { start, end };
 }
 
 function getWeeklyRange(year: number, week: number) {
+  // Get first day of the year
   const jan1 = new Date(Date.UTC(year, 0, 1));
+
+  // Calculate days to first Monday
   const daysToMonday = (8 - (jan1.getUTCDay() || 7)) % 7;
   const firstMonday = new Date(jan1);
   firstMonday.setUTCDate(jan1.getUTCDate() + daysToMonday);
 
+  // Calculate target Monday
   const targetMonday = new Date(firstMonday);
   targetMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
 
+  // Start of week (Monday 00:00:00 Lima time = 05:00:00 UTC)
   const start = new Date(targetMonday);
-  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCHours(5, 0, 0, 0);
+
+  // End of week (Sunday 23:59:59 Lima time)
   const end = new Date(targetMonday);
   end.setUTCDate(targetMonday.getUTCDate() + 6);
   end.setUTCHours(23, 59, 59, 999);
@@ -32,8 +49,13 @@ function getWeeklyRange(year: number, week: number) {
 }
 
 function getMonthlyRange(year: number, month: number) {
-  const start = new Date(Date.UTC(year, month, 1));
+  // month is 0-indexed (0 = January)
+  // Start of month (1st day 00:00:00 Lima time = 05:00:00 UTC)
+  const start = new Date(Date.UTC(year, month, 1, 5, 0, 0, 0));
+
+  // End of month (last day 23:59:59 Lima time)
   const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+
   return { start, end };
 }
 
@@ -72,7 +94,7 @@ async function getExpenseTotal(startDate: Date, endDate: Date) {
 // ── Public Report APIs ─────────────────────────────────────────────────
 
 export async function getDailyReport(dateStr: string) {
-  const { start, end } = getDateRangeInUTC(dateStr);
+  const { start, end } = getDateRangeInLima(dateStr);
   const [sales, expenses] = await Promise.all([
     getReportTotal(start, end),
     getExpenseTotal(start, end),
@@ -87,8 +109,8 @@ export async function getWeeklyReport(year: number, week: number) {
     getExpenseTotal(start, end),
   ]);
   return {
-    start: start.toISOString().split("T")[0],
-    end: end.toISOString().split("T")[0],
+    start: formatInTimeZone(start, TIMEZONE, "yyyy-MM-dd"),
+    end: formatInTimeZone(end, TIMEZONE, "yyyy-MM-dd"),
     data: { ...sales, expenses },
   };
 }
@@ -100,8 +122,8 @@ export async function getMonthlyReport(year: number, month: number) {
     getExpenseTotal(start, end),
   ]);
   return {
-    start: start.toISOString().split("T")[0],
-    end: end.toISOString().split("T")[0],
+    start: formatInTimeZone(start, TIMEZONE, "yyyy-MM-dd"),
+    end: formatInTimeZone(end, TIMEZONE, "yyyy-MM-dd"),
     data: { ...sales, expenses },
   };
 }
@@ -115,7 +137,7 @@ export async function getOrdersForPeriod(
   let start: Date, end: Date;
 
   if (periodType === "daily") {
-    ({ start, end } = getDateRangeInUTC(args[0] as string));
+    ({ start, end } = getDateRangeInLima(args[0] as string));
   } else if (periodType === "weekly") {
     ({ start, end } = getWeeklyRange(args[0] as number, args[1] as number));
   } else {
@@ -137,7 +159,11 @@ export async function getOrdersForPeriod(
 
   return orders.map((order) => ({
     ...order,
-    createdAt: order.createdAt.toISOString(),
+    createdAt: formatInTimeZone(
+      order.createdAt,
+      TIMEZONE,
+      "yyyy-MM-dd'T'HH:mm:ss",
+    ),
   }));
 }
 
@@ -148,7 +174,7 @@ export async function getVoidRecordsCount(
   let start: Date, end: Date;
 
   if (periodType === "daily") {
-    ({ start, end } = getDateRangeInUTC(args[0] as string));
+    ({ start, end } = getDateRangeInLima(args[0] as string));
   } else if (periodType === "weekly") {
     ({ start, end } = getWeeklyRange(args[0] as number, args[1] as number));
   } else {
@@ -167,7 +193,7 @@ export async function getExpensesForPeriod(
   let start: Date, end: Date;
 
   if (periodType === "daily") {
-    ({ start, end } = getDateRangeInUTC(args[0] as string));
+    ({ start, end } = getDateRangeInLima(args[0] as string));
   } else if (periodType === "weekly") {
     ({ start, end } = getWeeklyRange(args[0] as number, args[1] as number));
   } else {
@@ -184,6 +210,10 @@ export async function getExpensesForPeriod(
     name: expense.name,
     cost: expense.cost,
     notes: expense.notes,
-    createdAt: expense.createdAt.toISOString(),
+    createdAt: formatInTimeZone(
+      expense.createdAt,
+      TIMEZONE,
+      "yyyy-MM-dd'T'HH:mm:ss",
+    ),
   }));
 }
