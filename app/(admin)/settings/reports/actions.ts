@@ -7,18 +7,17 @@ import { formatInTimeZone } from "date-fns-tz";
 
 const TIMEZONE = "America/Lima";
 
-// ── Helpers: Date Range Calculations (in Lima Time) ───────────────────
-
 function getDateRangeInLima(dateStr: string) {
-  // Parse the date string as YYYY-MM-DD in Lima timezone
+  // Parse the date string as YYYY-MM-DD
   const [year, month, day] = dateStr.split("-").map(Number);
 
-  // Create start of day (00:00:00) in Lima timezone
-  // Lima is UTC-5, so we create UTC date with 5 hours offset
+  // Create start of day (00:00:00 Lima time)
+  // 00:00:00 Lima (UTC-5) = 05:00:00 UTC
   const start = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
 
-  // Create end of day (23:59:59) in Lima timezone
-  const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  // Create end of day (23:59:59 Lima time)
+  // 23:59:59 Lima (UTC-5) = 04:59:59 UTC next day
+  const end = new Date(Date.UTC(year, month - 1, day + 1, 4, 59, 59, 999));
 
   return { start, end };
 }
@@ -40,10 +39,10 @@ function getWeeklyRange(year: number, week: number) {
   const start = new Date(targetMonday);
   start.setUTCHours(5, 0, 0, 0);
 
-  // End of week (Sunday 23:59:59 Lima time)
+  // End of week (Sunday 23:59:59 Lima time = 04:59:59 UTC next day)
   const end = new Date(targetMonday);
-  end.setUTCDate(targetMonday.getUTCDate() + 6);
-  end.setUTCHours(23, 59, 59, 999);
+  end.setUTCDate(targetMonday.getUTCDate() + 6); // Sunday
+  end.setUTCHours(4, 59, 59, 999); // 23:59:59 Lima time
 
   return { start, end };
 }
@@ -53,8 +52,9 @@ function getMonthlyRange(year: number, month: number) {
   // Start of month (1st day 00:00:00 Lima time = 05:00:00 UTC)
   const start = new Date(Date.UTC(year, month, 1, 5, 0, 0, 0));
 
-  // End of month (last day 23:59:59 Lima time)
-  const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+  // End of month (last day 23:59:59 Lima time = 04:59:59 UTC next day)
+  // Month + 1, day 0 gives us last day of current month
+  const end = new Date(Date.UTC(year, month + 1, 0, 4, 59, 59, 999));
 
   return { start, end };
 }
