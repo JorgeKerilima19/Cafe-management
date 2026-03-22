@@ -1,4 +1,5 @@
 // app/(admin)/dashboard/actions.ts
+
 "use server";
 
 import { prisma } from "@/lib/prisma";
@@ -6,8 +7,6 @@ import { getCurrentUser } from "@/utils/session";
 import { revalidatePath } from "next/cache";
 import { startOfDay, endOfDay } from "date-fns";
 import { redirect } from "next/navigation";
-
-// ── Cash Register: Open ───────────────────────────────────────────────
 
 export async function openRegister(formData: FormData) {
   const openingAmount = parseFloat(formData.get("openingAmount") as string);
@@ -37,8 +36,6 @@ export async function openRegister(formData: FormData) {
   redirect("/dashboard");
 }
 
-// ── Cash Register: Close ──────────────────────────────────────────────
-
 export async function closeRegister(formData: FormData) {
   const closingAmount = parseFloat(formData.get("closingAmount") as string);
   const notes = formData.get("notes") as string;
@@ -59,7 +56,6 @@ export async function closeRegister(formData: FormData) {
   const todayStart = startOfDay(new Date());
   const todayEnd = endOfDay(todayStart);
 
-  // Fetch all daily data
   const [cashSales, yapeSales, voidRecords, expenses] = await Promise.all([
     prisma.order.aggregate({
       where: {
@@ -109,7 +105,6 @@ export async function closeRegister(formData: FormData) {
 
   revalidatePath("/dashboard");
 
-  // Redirect to closing summary with all data
   redirect(
     `/dashboard/close?data=${encodeURIComponent(
       JSON.stringify({
@@ -122,12 +117,10 @@ export async function closeRegister(formData: FormData) {
         totalExpenses,
         netBalance,
         expectedCash,
-      })
-    )}`
+      }),
+    )}`,
   );
 }
-
-// ── Expenses: Create ───────────────────────────────────────────────────
 
 export async function createDayExpense(formData: FormData) {
   const name = formData.get("name") as string;
@@ -138,7 +131,6 @@ export async function createDayExpense(formData: FormData) {
     throw new Error("Nombre y costo válido requeridos");
   }
 
-  // ✅ Only allow if register is open
   const openRegister = await prisma.cashRegister.findFirst({
     where: { isOpen: true },
   });
@@ -158,7 +150,63 @@ export async function createDayExpense(formData: FormData) {
   redirect("/dashboard");
 }
 
-// ── Expenses: Fetch Today ──────────────────────────────────────────────
+export async function updateDayExpense(formData: FormData) {
+  const id = formData.get("id") as string;
+  const name = formData.get("name") as string;
+  const cost = parseFloat(formData.get("cost") as string);
+  const notes = formData.get("notes") as string;
+
+  if (!id || !name?.trim() || isNaN(cost) || cost < 0) {
+    throw new Error("Datos inválidos para actualizar gasto");
+  }
+
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No autorizado");
+
+  const openRegister = await prisma.cashRegister.findFirst({
+    where: { isOpen: true },
+  });
+  if (!openRegister) {
+    throw new Error("La caja debe estar abierta para modificar gastos");
+  }
+
+  await prisma.dayExpense.update({
+    where: { id },
+    data: {
+      name: name.trim(),
+      cost,
+      notes: notes?.trim() || null,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteDayExpense(formData: FormData) {
+  const id = formData.get("id") as string;
+
+  if (!id) {
+    throw new Error("ID de gasto requerido");
+  }
+
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No autorizado");
+
+  const openRegister = await prisma.cashRegister.findFirst({
+    where: { isOpen: true },
+  });
+  if (!openRegister) {
+    throw new Error("La caja debe estar abierta para eliminar gastos");
+  }
+
+  await prisma.dayExpense.delete({
+    where: { id },
+  });
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
 
 async function getTodayExpenses() {
   const today = new Date();
@@ -181,8 +229,6 @@ async function getTodayExpenses() {
     total: totalResult._sum.cost || 0,
   };
 }
-
-// ── Dashboard: Full Data Fetch ─────────────────────────────────────────
 
 export async function getDashboardData() {
   const user = await getCurrentUser();
@@ -207,7 +253,6 @@ export async function getDashboardData() {
     getTodayExpenses(),
   ]);
 
-  // ✅ Serialize openRegister (if exists)
   const serializedRegister = openRegister
     ? {
         id: openRegister.id,
@@ -217,7 +262,6 @@ export async function getDashboardData() {
       }
     : null;
 
-  // ✅ Serialize expenses: convert Date → string for client safety
   const serializedExpenses = {
     total: rawExpenses.total,
     list: rawExpenses.list.map((expense) => ({
@@ -225,7 +269,7 @@ export async function getDashboardData() {
       name: expense.name,
       cost: expense.cost,
       notes: expense.notes,
-      createdAt: expense.createdAt.toISOString(), // ✅ Fix for TypeScript error
+      createdAt: expense.createdAt.toISOString(),
     })),
   };
 

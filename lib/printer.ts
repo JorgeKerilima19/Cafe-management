@@ -123,6 +123,6 @@ export async function printReceiptToPOS(content: Buffer): Promise<void> {
     console.log("✅ Printed successfully!");
   } catch (err: any) {
     console.error("❌ Print failed:", err.message);
-    throw new Error(`Print failed: ${err.message}`);
+  } finally {
   }
 }
