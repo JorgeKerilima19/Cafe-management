@@ -4,21 +4,18 @@
 import { prisma } from "@/lib/prisma";
 import { toZonedTime } from "date-fns-tz";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/utils/session";
+import { returnInventoryForOrder } from "@/lib/inventory";
 
 const TIMEZONE = "America/Lima";
 
 function getStartOfDayInLima() {
   const now = new Date();
   const limaNow = toZonedTime(now, TIMEZONE);
-
-  // Create date at midnight Lima time
   const year = limaNow.getFullYear();
   const month = limaNow.getMonth();
   const day = limaNow.getDate();
-
-  const startOfDayLima = new Date(Date.UTC(year, month, day, 5, 0, 0, 0)); // UTC-5 for Lima
-
-  return startOfDayLima;
+  return new Date(Date.UTC(year, month, day, 5, 0, 0, 0));
 }
 
 export async function getTodaysOrders() {
@@ -39,11 +36,7 @@ export async function getTodaysOrders() {
       paymentMethod: true,
       cashAmount: true,
       yapeAmount: true,
-      user: {
-        select: {
-          name: true,
-        },
-      },
+      user: { select: { name: true } },
       items: {
         select: {
           name: true,
@@ -69,28 +62,63 @@ export async function completeOrder(formData: FormData) {
 export async function voidOrder(formData: FormData) {
   const orderId = formData.get("orderId") as string;
   const reason = formData.get("reason") as string;
+
   if (!orderId || !reason?.trim()) {
     return { error: "Razón requerida" };
   }
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) throw new Error("Pedido no encontrado");
 
-  // Use Lima timezone for voidedAt
-  const voidedAt = toZonedTime(new Date(), TIMEZONE);
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "No autorizado" };
+  }
 
-  await prisma.voidRecord.create({
-    data: {
-      orderId,
-      amount: order.total,
-      reason: reason.trim(),
-      voidedAt,
-      voidedById: order.userId || null,
-    },
-  });
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { status: "CANCELLED" },
-  });
-  revalidatePath("/orders");
-  return { success: true };
+  try {
+    // Fetch the order with its items BEFORE voiding
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          select: { menuItemId: true, quantity: true },
+        },
+      },
+    });
+
+    if (!order) return { error: "Pedido no encontrado" };
+    if (order.status === "CANCELLED") {
+      return { error: "El pedido ya está cancelado" };
+    }
+
+    // Wrap void + inventory return in a transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.voidRecord.create({
+        data: {
+          orderId,
+          amount: order.total,
+          reason: reason.trim(),
+          voidedAt: new Date(),
+          voidedById: user.id,
+        },
+      });
+
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: "CANCELLED" },
+      });
+
+      // Return inventory based on recipes
+      await returnInventoryForOrder(
+        order.items.map((i) => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+        })),
+      );
+    });
+
+    revalidatePath("/orders");
+    revalidatePath("/inventory");
+    return { success: true };
+  } catch (error) {
+    console.error("Void order error:", error);
+    return { error: "Error al anular el pedido" };
+  }
 }

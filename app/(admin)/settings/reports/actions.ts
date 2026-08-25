@@ -4,57 +4,62 @@
 import { prisma } from "@/lib/prisma";
 import { toZonedTime } from "date-fns-tz";
 import { formatInTimeZone } from "date-fns-tz";
+import { startOfWeek, addDays } from "date-fns";
 
 const TIMEZONE = "America/Lima";
 
 function getDateRangeInLima(dateStr: string) {
-  // Parse the date string as YYYY-MM-DD
   const [year, month, day] = dateStr.split("-").map(Number);
 
-  // Create start of day (00:00:00 Lima time)
-  // 00:00:00 Lima (UTC-5) = 05:00:00 UTC
-  const start = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
+  const limaStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const zonedStart = toZonedTime(limaStart, TIMEZONE);
+  const start = new Date(zonedStart.toISOString());
 
-  // Create end of day (23:59:59 Lima time)
-  // 23:59:59 Lima (UTC-5) = 04:59:59 UTC next day
-  const end = new Date(Date.UTC(year, month - 1, day + 1, 4, 59, 59, 999));
+  const limaEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+  const zonedEnd = toZonedTime(limaEnd, TIMEZONE);
+  const end = new Date(zonedEnd.toISOString());
 
   return { start, end };
 }
 
 function getWeeklyRange(year: number, week: number) {
   // Get first day of the year
-  const jan1 = new Date(Date.UTC(year, 0, 1));
+  const jan4 = new Date(Date.UTC(year, 0, 4)); // Jan 4 is always in week 1
 
-  // Calculate days to first Monday
-  const daysToMonday = (8 - (jan1.getUTCDay() || 7)) % 7;
-  const firstMonday = new Date(jan1);
-  firstMonday.setUTCDate(jan1.getUTCDate() + daysToMonday);
+  // Calculate first Monday of the year (ISO week)
+  const firstWeekStart = startOfWeek(jan4, { weekStartsOn: 1 });
 
   // Calculate target Monday
-  const targetMonday = new Date(firstMonday);
-  targetMonday.setUTCDate(firstMonday.getUTCDate() + (week - 1) * 7);
+  const targetMonday = addDays(firstWeekStart, (week - 1) * 7);
 
-  // Start of week (Monday 00:00:00 Lima time = 05:00:00 UTC)
-  const start = new Date(targetMonday);
-  start.setUTCHours(5, 0, 0, 0);
+  // Convert to Lima timezone for proper boundaries
+  const limaStart = toZonedTime(targetMonday, TIMEZONE);
+  const limaEnd = addDays(limaStart, 6);
+  limaEnd.setHours(23, 59, 59, 999);
 
-  // End of week (Sunday 23:59:59 Lima time = 04:59:59 UTC next day)
-  const end = new Date(targetMonday);
-  end.setUTCDate(targetMonday.getUTCDate() + 6); // Sunday
-  end.setUTCHours(4, 59, 59, 999); // 23:59:59 Lima time
+  // Convert to UTC for database queries
+  const zonedStart = toZonedTime(limaStart, TIMEZONE);
+  const zonedEnd = toZonedTime(limaEnd, TIMEZONE);
+
+  const start = new Date(zonedStart.toISOString());
+  const end = new Date(zonedEnd.toISOString());
 
   return { start, end };
 }
 
 function getMonthlyRange(year: number, month: number) {
-  // month is 0-indexed (0 = January)
-  // Start of month (1st day 00:00:00 Lima time = 05:00:00 UTC)
-  const start = new Date(Date.UTC(year, month, 1, 5, 0, 0, 0));
+  // month is 0-indexed (0 = January, 11 = December)
 
-  // End of month (last day 23:59:59 Lima time = 04:59:59 UTC next day)
-  // Month + 1, day 0 gives us last day of current month
-  const end = new Date(Date.UTC(year, month + 1, 0, 4, 59, 59, 999));
+  // Start of month: 1st day at 00:00:00 Lima time
+  const limaStart = new Date(year, month, 1, 0, 0, 0, 0);
+  const zonedStart = toZonedTime(limaStart, TIMEZONE);
+  const start = new Date(zonedStart.toISOString());
+
+  // End of month: last day at 23:59:59.999 Lima time
+  // (month + 1, day 0) = last day of current month
+  const limaEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+  const zonedEnd = toZonedTime(limaEnd, TIMEZONE);
+  const end = new Date(zonedEnd.toISOString());
 
   return { start, end };
 }

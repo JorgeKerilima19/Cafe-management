@@ -10,18 +10,15 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
-  password  String // bcrypt hashed
+  password  String
   role      Role     @default(STAFF)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders Order[]
-
-  voidRecords VoidRecord[]
-
-  cashRegisters CashRegister[] @relation("OpenedRegisters")
-
+  orders             Order[]
+  voidRecords        VoidRecord[]
+  cashRegisters      CashRegister[] @relation("OpenedRegisters")
   cashRegisterClosed CashRegister[] @relation("ClosedRegisters")
 }
 
@@ -31,10 +28,6 @@ enum Role {
   STAFF
   SYSTEM
 }
-
-/// ========================
-/// MENU ITEMS
-/// ========================
 
 model MenuItem {
   id          String   @id @default(cuid())
@@ -48,33 +41,58 @@ model MenuItem {
   imageUrl    String?
 
   orderItems OrderItem[]
+  recipe     Recipe? // ← NEW: Optional 1-to-1 recipe
 }
 
-/// ========================
+/// ==========================================
+/// RECIPES (NEW)
+/// ==========================================
+
+model Recipe {
+  id         String   @id @default(cuid())
+  menuItemId String   @unique
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ingredients RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id       String @id @default(cuid())
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  quantityRequired Float // Must match the inventory item's unit (kg, L, units)
+  createdAt        DateTime @default(now())
+}
+
+/// ==========================================
 /// ORDERS
-/// ========================
+/// ==========================================
 
 model Order {
   id            String  @id @default(cuid())
-  customerName  String? // e.g., "Mesa 3" or "Ana"
-  customerPhone String? // for Yape reference
+  customerName  String?
+  customerPhone String?
 
   total      Float
   cashAmount Float @default(0)
   yapeAmount Float @default(0)
 
-  paymentMethod String // "CASH" | "YAPE" | "MIXED"
+  paymentMethod String
   status        OrderStatus @default(PENDING)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Optional: staff who marked as paid/prepared
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  items OrderItem[]
-
+  items       OrderItem[]
   voidRecords VoidRecord[]
 }
 
@@ -86,10 +104,6 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
 }
-
-/// ========================
-/// ORDER ITEMS (for item-level reporting)
-/// ========================
 
 model OrderItem {
   id         String @id @default(cuid())
@@ -111,12 +125,11 @@ model PendingOrder {
   id            String   @id @default(cuid())
   customerName  String
   customerPhone String?
-  items         Json // Array of { id, name, price, quantity }
+  items         Json
   total         Float
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Optional: auto-delete old carts
   @@map("pending_orders")
 }
 
@@ -130,26 +143,24 @@ model VoidRecord {
   createdAt DateTime @default(now())
   voidedAt  DateTime
 
-  // ✅ Make these OPTIONAL
-  voidedById String? // ← ? makes it nullable
-  voidedBy   User?   @relation(fields: [voidedById], references: [id]) // ← ? makes relation optional
+  voidedById String?
+  voidedBy   User?   @relation(fields: [voidedById], references: [id])
 }
 
 model CashRegister {
   id             String    @id @default(cuid())
   openedAt       DateTime  @default(now())
   closedAt       DateTime?
-  openingAmount  Float // Amount left as safeguard
-  closingAmount  Float? // Final cash count
-  expectedAmount Float? // Calculated sales (cash only)
+  openingAmount  Float
+  closingAmount  Float?
+  expectedAmount Float?
   notes          String?   @db.Text
   isOpen         Boolean   @default(true)
 
-  // Staff who opened/closed
   openedById String
   openedBy   User   @relation("OpenedRegisters", fields: [openedById], references: [id])
 
-  closedById String? // Optional if not closed yet
+  closedById String?
   closedBy   User?   @relation("ClosedRegisters", fields: [closedById], references: [id])
 
   @@map("cash_registers")
@@ -158,13 +169,15 @@ model CashRegister {
 model InventoryItem {
   id        String   @id @default(cuid())
   name      String   @db.VarChar(255)
-  quantity  Float // Supports decimals (e.g., 2.5 kg)
-  unit      String   @db.VarChar(50) // kg, units, liters, etc.
-  category  String?  @db.VarChar(100) // Coffee, Milk, Cups, etc.
-  threshold Float    @default(0) // Alert when stock < this
+  quantity  Float
+  unit      String   @db.VarChar(50)
+  category  String?  @db.VarChar(100)
+  threshold Float    @default(0)
   notes     String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  recipeIngredients RecipeIngredient[] // ← NEW: Reverse relation
 
   @@map("inventory_items")
 }

@@ -1,8 +1,7 @@
-// app/(admin)/settings/menu/[id]/page.tsx
 import { requireAdmin } from "@/utils/session";
 import { prisma } from "@/lib/prisma";
-import { updateMenuItem } from "../actions";
 import CreateMenuItemForm from "../CreateMenuItemForm";
+import RecipeEditor from "../RecipeEditor";
 import Link from "next/link";
 
 export default async function EditMenuItemPage({
@@ -10,9 +9,7 @@ export default async function EditMenuItemPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // ✅ AWAIT params to get the actual value
   const { id } = await params;
-
   await requireAdmin();
 
   if (!id) {
@@ -31,6 +28,19 @@ export default async function EditMenuItemPage({
 
   const item = await prisma.menuItem.findUnique({
     where: { id },
+    include: {
+      recipe: {
+        include: {
+          ingredients: {
+            include: {
+              inventoryItem: {
+                select: { name: true, unit: true },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!item) {
@@ -47,7 +57,6 @@ export default async function EditMenuItemPage({
     );
   }
 
-  // Get existing categories
   const categoryData = await prisma.menuItem.groupBy({
     by: ["category"],
     orderBy: { category: "asc" },
@@ -55,8 +64,8 @@ export default async function EditMenuItemPage({
   const existingCategories = categoryData.map((c) => c.category);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="mb-4">
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div>
         <Link
           href="/settings/menu"
           className="text-rose-700 hover:underline text-sm"
@@ -64,12 +73,13 @@ export default async function EditMenuItemPage({
           ← Volver al menú
         </Link>
       </div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">
+
+      <h1 className="text-2xl font-bold text-gray-800">
         Editar Item: {item.name}
       </h1>
 
       {item.imageUrl && (
-        <div className="mb-6 text-center">
+        <div className="text-center">
           <img
             src={item.imageUrl}
             alt={item.name}
@@ -82,6 +92,12 @@ export default async function EditMenuItemPage({
         item={item}
         existingCategories={existingCategories}
         isEditPage={true}
+      />
+
+      {/* Recipe Editor (only on edit page) */}
+      <RecipeEditor
+        menuItemId={item.id}
+        initialIngredients={item.recipe?.ingredients || []}
       />
     </div>
   );
